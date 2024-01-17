@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Log;
 
 trait BustsCacheKeys
 {
-
     public static function bootBustsCacheKeys()
     {
         $events = self::getBustingEvents();
@@ -17,7 +16,17 @@ trait BustsCacheKeys
 
         $events = is_array($events) ? $events : [$events];
         foreach ($events as $eventName) {
-            // TODO optimize updating and updated only if model has changed
+            if ($eventName === 'updated') {
+                // If the model is not dirty, we don't need to bust cache keys.
+                static::updated(function ($model) {
+                    if (!$model->isDirty()) {
+                        return;
+                    }
+
+                    $model->bustCacheKeys('updated');
+                });
+            }
+
             static::$eventName(function ($model) use ($eventName) {
                 $model->bustCacheKeys($eventName);
             });
@@ -27,13 +36,13 @@ trait BustsCacheKeys
     /**
      * Remove cache keys from cache.
      *
-     * @param string $event
      * @return void
      */
     protected function bustCacheKeys(string $event)
     {
         if (! method_exists($this, 'getCacheKeysToBust')) {
             Log::warning('Class '.get_class($this).' uses BustsCacheKeys trait but does not implement getCacheKeysToBust() method.');
+
             return;
         }
 
@@ -41,6 +50,7 @@ trait BustsCacheKeys
 
         if (! is_array($keys) || empty($keys)) {
             Log::warning('Class '.get_class($this).' method "getCacheKeysToBust" returned other value than array or empty cache keys for event '.$event.'.');
+
             return;
         }
 
@@ -48,6 +58,7 @@ trait BustsCacheKeys
             return ! is_string($key) && ! $key instanceof KeyGenerator && $key instanceof \Closure;
         })) {
             Log::warning('Class '.get_class($this).' method "getCacheKeysToBust" returned non-string cache keys for event '.$event.'.');
+
             return;
         }
 
@@ -79,5 +90,4 @@ trait BustsCacheKeys
 
         return $events;
     }
-
 }
