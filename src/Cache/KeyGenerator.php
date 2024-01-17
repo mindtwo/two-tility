@@ -134,6 +134,14 @@ class KeyGenerator implements JsonSerializable, Stringable
     }
 
     /**
+     * Get cache key as string (alias for __toString).
+     */
+    public function toString(): string
+    {
+        return $this->__toString();
+    }
+
+    /**
      * Get cache key as string.
      *
      * @return string
