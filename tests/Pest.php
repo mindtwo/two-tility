@@ -11,7 +11,9 @@
 |
 */
 
-// uses(Tests\TestCase::class)->in('Feature');
+use Illuminate\Http\Request;
+
+uses(\mindtwo\TwoTility\Tests\TestCase::class)->in('Unit', 'Feature');
 
 /*
 |--------------------------------------------------------------------------
@@ -24,8 +26,8 @@
 |
 */
 
-expect()->extend('toBeOne', function () {
-    return $this->toBe(1);
+expect()->extend('toBeStringable', function () {
+    return is_a($this->value, Stringable::class);
 });
 
 /*
@@ -38,8 +40,16 @@ expect()->extend('toBeOne', function () {
 | global functions to help you to reduce the number of lines of code in your test files.
 |
 */
-
-function something()
+function reqHeader(string $headerName, string $value)
 {
-    // ..
+    //create a request
+    $request = new Request();
+
+    //replace the empty request header with an array
+    $request->headers->replace([$headerName => $value]);
+
+    //bind the request
+    app()->instance('request', $request);
+
+    // return request()->header($headerName);
 }

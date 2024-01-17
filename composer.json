@@ -6,7 +6,7 @@
     "autoload": {
         "psr-4": {
             "mindtwo\\TwoTility\\": "src/",
-            "mindtwo\\PxUserLaravel\\Tests\\": "tests"
+            "mindtwo\\TwoTility\\Tests\\": "tests/"
         },
         "files": [
             "src/helpers.php"

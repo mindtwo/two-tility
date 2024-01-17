@@ -55,7 +55,7 @@ trait BustsCacheKeys
         }
 
         if (array_filter($keys, function ($key) {
-            return ! is_string($key) && ! $key instanceof KeyGenerator && $key instanceof \Closure;
+            return ! is_string($key) && ! $key instanceof KeyGenerator && ! is_callable($key);
         })) {
             Log::warning('Class '.get_class($this).' method "getCacheKeysToBust" returned non-string cache keys for event '.$event.'.');
 
@@ -63,14 +63,14 @@ trait BustsCacheKeys
         }
 
         foreach ($keys as $key) {
-            if ($key instanceof \Closure && is_string($value = $key())) {
+            if (is_callable($key) && is_string($value = $key())) {
                 $key = $value;
             }
 
             if ($key instanceof KeyGenerator) {
                 $key = $key->__toString();
             }
-            Log::debug('Busting cache key: '.$key);
+
             is_string($key) ? cache()->forget($key) : null;
         }
     }
