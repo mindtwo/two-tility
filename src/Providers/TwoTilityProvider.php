@@ -6,7 +6,6 @@ use Illuminate\Support\ServiceProvider;
 
 class TwoTilityProvider extends ServiceProvider
 {
-
     /**
      * Bootstrap any package services.
      *

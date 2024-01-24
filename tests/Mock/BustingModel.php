@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class BustingModel extends Model
 {
-    use \mindtwo\TwoTility\Cache\BustsCacheKeys;
+    use \mindtwo\TwoTility\Cache\Models\BustsCacheKeys;
 
     public $timestamps = false;
 

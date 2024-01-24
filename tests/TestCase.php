@@ -8,7 +8,6 @@ use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
 {
-
     /**
      * Define database migrations.
      *
@@ -38,5 +37,4 @@ class TestCase extends Orchestra
             TwoTilityProvider::class,
         ];
     }
-
 }

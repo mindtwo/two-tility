@@ -65,8 +65,8 @@ it('busts cache keys on model events with closure', function () {
     expect(Cache::has('test-key-3'))->toBeFalse();
 
     // expect(Cache::has('test-key-1'))->toBeFalse()
-        // ->and(Cache::has('test-key-2'))->toBeFalse()
-        // ->and(Cache::has('test-key-3'))->toBeFalse();
+    // ->and(Cache::has('test-key-2'))->toBeFalse()
+    // ->and(Cache::has('test-key-3'))->toBeFalse();
 });
 
 it('busts cache keys on model event with cache_key helper', function () {

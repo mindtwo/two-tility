@@ -1,6 +1,6 @@
 <?php
 
-namespace mindtwo\TwoTility\Cache;
+namespace mindtwo\TwoTility\Cache\Models;
 
 use Illuminate\Support\Facades\Log;
 
@@ -19,7 +19,7 @@ trait BustsCacheKeys
             if ($eventName === 'updated') {
                 // If the model is not dirty, we don't need to bust cache keys.
                 static::updated(function ($model) {
-                    if (!$model->isDirty()) {
+                    if (! $model->isDirty()) {
                         return;
                     }
 

@@ -2,7 +2,6 @@
 
 namespace mindtwo\TwoTility\Cache;
 
-use Illuminate\Support\Facades\Log;
 use JsonSerializable;
 use Stringable;
 
@@ -20,10 +19,10 @@ class KeyGenerator implements JsonSerializable, Stringable
     /**
      * Create a new KeyGenerator instance.
      *
-     * @param string $name - The name of the cache key.
-     * @param array<string, mixed>|null $options - Additional options for cache key. If value is either 'header', 'auth' or 'param' the param is added via respective method.
+     * @param  string  $name  - The name of the cache key.
+     * @param  array<string, mixed>|null  $options  - Additional options for cache key. If value is either 'header', 'auth' or 'param' the param is added via respective method.
      */
-    private function __construct(
+    final private function __construct(
         protected string $name,
         ?array $options = null
     ) {
@@ -65,6 +64,8 @@ class KeyGenerator implements JsonSerializable, Stringable
 
     /**
      * Add header value to cache key.
+     *
+     * @param  string|array<string>  $names  - Header name or array of header names.
      */
     public function addHeader(string|array $names): self
     {
@@ -85,8 +86,11 @@ class KeyGenerator implements JsonSerializable, Stringable
      */
     public function addAuth(): self
     {
-        return $this->addParam('auth_id', auth()->user()?->id)
-            ->addParam('auth_updated_at', auth()->user()?->updated_at->timestamp);
+        $user = auth()->user();
+
+        return $this->addParam('auth_id', $user?->id.'')
+            // @phpstan-ignore-next-line - we check if property exists
+            ->addParamIf(property_exists($user, 'updated_at'), 'auth_updated_at', $user->updated_at->timestamp);
     }
 
     /**
@@ -125,6 +129,8 @@ class KeyGenerator implements JsonSerializable, Stringable
 
     /**
      * Get filtered parameters. Remove empty values.
+     *
+     * @return array<string, mixed>
      */
     protected function getFilteredParams(): array
     {
@@ -165,8 +171,10 @@ class KeyGenerator implements JsonSerializable, Stringable
 
     /**
      * Get cache key as json.
+     *
+     * @param  array<string, mixed>  $options  - Additional options for cache key. If value is either 'header', 'auth' or 'param' the param is added via respective method.
      */
-    public static function make(string $name, array $options = []): self
+    public static function make(string $name, array $options = []): static
     {
         return new static($name, $options);
     }
