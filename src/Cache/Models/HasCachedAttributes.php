@@ -6,9 +6,18 @@ use mindtwo\TwoTility\Cache\Data\DataCache;
 
 trait HasCachedAttributes
 {
-    private bool $disableCache = false;
+    private static bool $disableCache = false;
 
-    private bool $disableCacheLoad = false;
+    private static bool $disableCacheLoad = false;
+
+    /**
+     * Data caches that should be loaded on access.
+     */
+    protected array $loadOnAccess = [];
+
+    protected array $loadOnRetrieved = [];
+
+    protected array $cacheClassNames = [];
 
     /**
      * Data that is cached.
@@ -20,14 +29,46 @@ trait HasCachedAttributes
     public static function bootHasCachedAttributes()
     {
         self::retrieved(function (self $model) {
-            if (method_exists($model, 'loadedCachesOnRetrieved')) {
-                $model->loadDataCache($model->loadedCachesOnRetrieved());
+            if (static::$disableCache || static::$disableCacheLoad) {
+                return;
             }
 
-            if (property_exists($model, 'loadedCachesOnRetrieved')) {
-                $model->loadDataCache($model->loadedCachesOnRetrieved);
-            }
+            $dataCaches = $model->getDataCaches();
+
+            $model->cacheClassNames = array_map(function ($cache) {
+                if (gettype($cache) === 'string' && is_a($cache, DataCache::class, true)) {
+                    return $cache;
+                }
+
+                if (gettype($cache) === 'array' && ($clz = $cache['class'] ?? false) && is_a($clz, DataCache::class, true)) {
+                    return $clz;
+                }
+
+                return null;
+            }, $dataCaches);
+
+            $model->loadOnAccess = array_keys(array_filter($model->getDataCaches(), function ($cache) {
+                return $cache['loadOnAccess'] ?? false;
+            }));
+
+            $model->loadOnRetrieved = array_keys(array_filter($model->getDataCaches(), function ($cache) {
+                return $cache['loadOnRetrieved'] ?? false;
+            }));
+
+            $model->loadDataCache(array_keys($model->loadOnRetrieved));
         });
+    }
+
+    /**
+     * Get data caches.
+     *
+     * @return null|array<string, array|string>
+     */
+    abstract public function getDataCaches(): ?array;
+
+    protected function getDataCacheClassName(string $name): ?string
+    {
+        return $this->cacheClassNames[$name] ?? null;
     }
 
     /**
@@ -38,6 +79,8 @@ trait HasCachedAttributes
      */
     protected function getCachedAttribute($name)
     {
+        $this->loadDataCache($this->loadOnAccess);
+
         foreach ($this->loadedDataCaches as $key => $value) {
             if (! $value || ! $value instanceof DataCache) {
                 continue;
@@ -77,7 +120,7 @@ trait HasCachedAttributes
     public function getAttribute($name)
     {
         // if cache is disabled, return attribute directly
-        if ($this->disableCache) {
+        if (static::$disableCache) {
             return parent::getAttribute($name);
         }
 
@@ -92,34 +135,31 @@ trait HasCachedAttributes
     /**
      * Disable data caching.
      */
-    public function disableCache(bool $onlyLoad = false): self
+    public static function disableCache(bool $onlyLoad = false): void
     {
         if (! $onlyLoad) {
-            $this->disableCache = true;
+            static::$disableCache = true;
         }
 
-        $this->disableCacheLoad = true;
+        static::$disableCacheLoad = true;
 
-        return $this;
     }
 
     /**
      * Alias for disableCache(true).
      */
-    public function disableCacheLoad(): self
+    public static function disableCacheLoad(): void
     {
-        return $this->disableCache(true);
+        self::disableCache(true);
     }
 
     /**
      * Enable data cache.
      */
-    public function enableCache(): self
+    public static function enableCache(): void
     {
-        $this->disableCache = false;
-        $this->disableCacheLoad = false;
-
-        return $this;
+        static::$disableCache = false;
+        static::$disableCacheLoad = false;
     }
 
     /**
@@ -181,13 +221,13 @@ trait HasCachedAttributes
      */
     protected function loadDataCache(string|array $name): self
     {
-        if ((gettype($name) === 'string' && ! $this->usesDataCache($name)) || $this->disableCacheLoad) {
+        if ((gettype($name) === 'string' && ! $this->usesDataCache($name)) || static::$disableCacheLoad) {
             return $this;
         }
 
         if (gettype($name) === 'string') {
-            $cache = $this->dataCaches[$name];
-            if ($this->isCacheLoaded($name)) {
+            $cache = $this->getDataCacheClassName($name);
+            if (!$cache || $this->isCacheLoaded($name)) {
                 return $this;
             }
 
@@ -231,10 +271,10 @@ trait HasCachedAttributes
      */
     private function usesDataCache(string $name): bool
     {
-        if (! property_exists($this, 'dataCaches') || ! is_array($this->dataCaches)) {
+        if (empty($this->getDataCaches())) {
             return false;
         }
 
-        return array_key_exists($name, $this->dataCaches);
+        return array_key_exists($name, $this->getDataCaches());
     }
 }
