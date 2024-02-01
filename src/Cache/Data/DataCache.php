@@ -45,6 +45,10 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
 
     public function load(): void
     {
+        if (! $this->canLoad()) {
+            return;
+        }
+
         $this->loadDataCache();
     }
 
@@ -53,6 +57,10 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function unload(): void
     {
+        if (! $this->isLoaded()) {
+            return;
+        }
+
         cache()->forget($this->cacheKey());
     }
 
@@ -87,6 +95,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function loadDataCache(bool $forceLoad = false): void
     {
+        // Do nothing if data cache is not allowed to be loaded
+        if (! $this->canLoad()) {
+            return;
+        }
+
         if ($forceLoad) {
             $this->loadData();
             $this->saveData();
@@ -135,6 +148,10 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function isLoaded(): bool
     {
+        if (! $this->canLoad()) {
+            return false;
+        }
+
         return cache()->has($this->cacheKey()) && $this->hasData();
     }
 
@@ -174,6 +191,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     protected function ttl(): int
     {
         return $this->ttl;
+    }
+
+    protected function canLoad(): bool
+    {
+        return true;
     }
 
     /**
