@@ -4,6 +4,7 @@ namespace mindtwo\TwoTility\Cache\Data;
 
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Support\Facades\Cache;
 use JsonSerializable;
 use Stringable;
 
@@ -11,6 +12,7 @@ use Stringable;
  * @template T extends \Illuminate\Database\Eloquent\Model
  *
  * @property T $model
+ *
  * @implements Arrayable<string, mixed>
  */
 abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Stringable
@@ -31,6 +33,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      * Allow empty data cache.
      */
     protected bool $allowEmpty = false;
+
+    /**
+     * Cache driver.
+     */
+    protected ?string $cacheDriver = null;
 
     /**
      * DataCache constructor.
@@ -61,7 +68,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
             return;
         }
 
-        cache()->forget($this->cacheKey());
+        $this->cacheInstance()->forget($this->cacheKey());
     }
 
     /**
@@ -113,8 +120,8 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         }
 
         // Load data cache from cache store if available
-        if (cache()->has($this->cacheKey())) {
-            $this->data = cache()->get($this->cacheKey());
+        if ($this->cacheInstance()->has($this->cacheKey())) {
+            $this->data = $this->cacheInstance()->get($this->cacheKey());
 
             return;
         }
@@ -152,7 +159,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
             return false;
         }
 
-        return cache()->has($this->cacheKey()) && $this->hasData();
+        return $this->cacheInstance()->has($this->cacheKey()) && $this->hasData();
     }
 
     /**
@@ -172,7 +179,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
             return;
         }
 
-        cache()->set($this->cacheKey(), $this->data, now()->addSeconds($this->ttl()));
+        $this->cacheInstance()->put($this->cacheKey(), $this->data, now()->addSeconds($this->ttl()));
     }
 
     /**
@@ -196,6 +203,16 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     protected function canLoad(): bool
     {
         return true;
+    }
+
+    /**
+     * Get cache instance.
+     */
+    protected function cacheInstance(): \Illuminate\Contracts\Cache\Repository
+    {
+        $driver = $this->cacheDriver ?? config('cache.default');
+
+        return Cache::store($driver);
     }
 
     /**
