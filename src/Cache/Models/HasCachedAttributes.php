@@ -96,19 +96,22 @@ trait HasCachedAttributes
         return $this->throwMissingAttributeExceptionIfApplicable($name);
     }
 
-    private function getAttributeSafely($name)
+    /**
+     * Check if attribute exists.
+     *
+     * @param  mixed  $name
+     * @return bool
+     */
+    private function isAttribute($name): bool
     {
-        try {
-            return parent::getAttribute($name);
-        } catch (\Throwable $th) {
-            $value = $this->getCachedAttribute($name);
+        // TODO our cache classes should register their attributes and we should check here if the attribute is registered
 
-            if ($value) {
-                return $value;
-            }
-
-            throw $th;
-        }
+        return array_key_exists($name, $this->attributes) ||
+            array_key_exists($name, $this->casts) ||
+            $this->hasGetMutator($name) ||
+            $this->hasAttributeMutator($name) ||
+            $this->isClassCastable($name) ||
+            $this->isRelation($name) || $this->relationLoaded($name);
     }
 
     /**
@@ -124,12 +127,12 @@ trait HasCachedAttributes
             return parent::getAttribute($name);
         }
 
-        // if the model prevents accessing missing attributes, we need to wrap the call
-        if (static::preventsAccessingMissingAttributes()) {
-            return $this->getAttributeSafely($name);
+        // if attribute exists, return it
+        if ($this->isAttribute($name)) {
+            return parent::getAttribute($name);
         }
 
-        return parent::getAttribute($name) ?? $this->getCachedAttribute($name);
+        return $this->getCachedAttribute($name);
     }
 
     /**
