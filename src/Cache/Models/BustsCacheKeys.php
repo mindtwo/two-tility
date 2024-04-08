@@ -3,6 +3,7 @@
 namespace mindtwo\TwoTility\Cache\Models;
 
 use Illuminate\Support\Facades\Log;
+use mindtwo\TwoTility\Cache\KeyGenerator;
 
 trait BustsCacheKeys
 {
