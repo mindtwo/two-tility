@@ -13,11 +13,28 @@ trait HasCachedAttributes
     /**
      * Data caches that should be loaded on access.
      */
-    protected array $loadOnAccess = [];
+    protected array $loadsOnAccess = [];
 
-    protected array $loadOnRetrieved = [];
+    /**
+     * Data caches that should be loaded on retrieved.
+     */
+    protected array $loadsOnRetrieved = [];
 
-    protected array $cacheClassNames = [];
+    /**
+     * Retrieved cached attributes.
+     *
+     * @var array<string, mixed>
+     */
+    protected array $retrievedCachedAttributes = [];
+
+    /**
+     * Data caches.
+     *
+     * @var array<string, DataCache>
+     */
+    protected array $dataCaches = [];
+
+    protected array $cacheAbleAttributes = [];
 
     /**
      * Data that is cached.
@@ -28,47 +45,66 @@ trait HasCachedAttributes
 
     public static function bootHasCachedAttributes()
     {
-        self::retrieved(function (self $model) {
-            if (static::$disableCache || static::$disableCacheLoad) {
-                return;
+        static::created(fn ($model) => self::bootDataCaches($model));
+        static::retrieved(fn ($model) => self::bootDataCaches($model));
+    }
+
+    protected static function bootDataCaches($model)
+    {
+        if (static::$disableCache || static::$disableCacheLoad) {
+            return;
+        }
+
+        $dataCaches = $model->getDataCaches();
+
+        foreach ($dataCaches as $key => $cache) {
+            $clz = $cache['class'] ?? false;
+
+            if (! $clz || ! is_a($clz, DataCache::class, true)) {
+                continue;
             }
 
-            $dataCaches = $model->getDataCaches();
+            $cache = new $clz($model);
+            $model->dataCaches[$key] = $cache;
 
-            $model->cacheClassNames = array_map(function ($cache) {
-                if (gettype($cache) === 'string' && is_a($cache, DataCache::class, true)) {
-                    return $cache;
-                }
+            $model->cacheAbleAttributes = array_merge($model->cacheAbleAttributes, $cache->keys());
 
-                if (gettype($cache) === 'array' && ($clz = $cache['class'] ?? false) && is_a($clz, DataCache::class, true)) {
-                    return $clz;
-                }
+            if ($cache->loadOnAccess()) {
+                $model->loadsOnAccess[] = $key;
+            }
 
-                return null;
-            }, $dataCaches);
+            if ($cache->loadOnRetrieved()) {
+                $model->loadsOnRetrieved[] = $key;
+            }
 
-            $model->loadOnAccess = array_keys(array_filter($model->getDataCaches(), function ($cache) {
-                return $cache['loadOnAccess'] ?? false;
-            }));
+        }
 
-            $model->loadOnRetrieved = array_keys(array_filter($model->getDataCaches(), function ($cache) {
-                return $cache['loadOnRetrieved'] ?? false;
-            }));
-
-            $model->loadDataCache(array_keys($model->loadOnRetrieved));
-        });
+        $model->loadDataCache(array_keys($model->loadsOnRetrieved));
     }
 
     /**
      * Get data caches.
      *
-     * @return null|array<string, array|string>
+     * @return null|array<string, class-string<DataCache>>
      */
     abstract public function getDataCaches(): ?array;
 
     protected function getDataCacheClassName(string $name): ?string
     {
-        return $this->cacheClassNames[$name] ?? null;
+        if (! isset($this->dataCaches[$name])) {
+            return null;
+        }
+
+        return get_class($this->dataCaches[$name]) ?? null;
+    }
+
+    protected function getDataCache(string $name): ?DataCache
+    {
+        if (! isset($this->dataCaches[$name])) {
+            return null;
+        }
+
+        return $this->dataCaches[$name];
     }
 
     /**
@@ -79,7 +115,11 @@ trait HasCachedAttributes
      */
     protected function getCachedAttribute($name)
     {
-        $this->loadDataCache($this->loadOnAccess);
+        if (isset($this->retrievedCachedAttributes[$name])) {
+            return $this->retrievedCachedAttributes[$name];
+        }
+
+        $this->loadDataCache($this->loadsOnAccess);
 
         foreach ($this->loadedDataCaches as $key => $value) {
             if (! $value || ! $value instanceof DataCache) {
@@ -89,6 +129,8 @@ trait HasCachedAttributes
             $value = $value->get($name);
 
             if ($value) {
+                // put attribute in cache on model
+                $this->retrievedCachedAttributes[$name] = $value;
                 return $value;
             }
         }
@@ -97,21 +139,13 @@ trait HasCachedAttributes
     }
 
     /**
-     * Check if attribute exists.
+     * Check if attribute is cacheable.
      *
      * @param  mixed  $name
-     * @return bool
      */
-    private function isAttribute($name): bool
+    protected function isCacheableAttribute($name): bool
     {
-        // TODO our cache classes should register their attributes and we should check here if the attribute is registered
-
-        return array_key_exists($name, $this->attributes) ||
-            array_key_exists($name, $this->casts) ||
-            $this->hasGetMutator($name) ||
-            $this->hasAttributeMutator($name) ||
-            $this->isClassCastable($name) ||
-            $this->isRelation($name) || $this->relationLoaded($name);
+        return in_array($name, $this->cacheAbleAttributes);
     }
 
     /**
@@ -128,11 +162,11 @@ trait HasCachedAttributes
         }
 
         // if attribute exists, return it
-        if ($this->isAttribute($name)) {
-            return parent::getAttribute($name);
+        if ($this->isCacheableAttribute($name)) {
+            return $this->getCachedAttribute($name);
         }
 
-        return $this->getCachedAttribute($name);
+        return parent::getAttribute($name);
     }
 
     /**
@@ -229,19 +263,20 @@ trait HasCachedAttributes
         }
 
         if (gettype($name) === 'string') {
-            $cache = $this->getDataCacheClassName($name);
-            if (!$cache || $this->isCacheLoaded($name)) {
+            if (isset($this->loadedDataCaches[$name])) {
                 return $this;
             }
 
-            // Check if cache is valid
-            if (gettype($cache) !== 'string' || ! is_a($cache, DataCache::class, true)) {
-                throw new \Exception('Can not load cache for name '.$name, 1);
+            $cache = $this->getDataCache($name);
+
+            if (! $cache || ! $cache instanceof DataCache) {
+                return $this;
             }
 
             // Load cache
-            $this->loadedDataCaches[$name] = new $cache($this);
+            $cache->load();
 
+            $this->loadedDataCaches[$name] = $cache;
             return $this;
         }
 
@@ -251,22 +286,6 @@ trait HasCachedAttributes
         }
 
         return $this;
-    }
-
-    /**
-     * Check if data cache is loaded.
-     *
-     * @param string $name
-     * @return boolean
-     */
-    private function isCacheLoaded(string $name): bool
-    {
-        if (! isset($this->loadedDataCaches[$name])) {
-            return false;
-        }
-
-        $dataCache = $this->loadedDataCaches[$name];
-        return $dataCache instanceof DataCache && $dataCache->isLoaded();
     }
 
     /**

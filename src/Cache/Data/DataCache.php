@@ -40,6 +40,18 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     protected ?string $cacheDriver = null;
 
     /**
+     * Load data on retrieved.
+     * Set to true if data cache should be loaded when model is retrieved or created.
+     */
+    protected bool $loadOnRetrieved = false;
+
+    /**
+     * Load data on access attribute access.
+     * Set to true if data cache should be loaded when an attribute is accessed.
+     */
+    protected bool $loadOnAccess = false;
+
+    /**
      * DataCache constructor.
      *
      * @param  T  $model
@@ -47,7 +59,6 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     public function __construct(
         protected $model,
     ) {
-        $this->loadDataCache();
     }
 
     public function load(): void
@@ -205,6 +216,16 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         return true;
     }
 
+    public function loadOnRetrieved(): bool
+    {
+        return $this->loadOnRetrieved;
+    }
+
+    public function loadOnAccess(): bool
+    {
+        return $this->loadOnAccess;
+    }
+
     /**
      * Get cache instance.
      */
@@ -221,6 +242,13 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      * @return array<string, mixed>
      */
     abstract public function cacheData(): array;
+
+    /**
+     * Get keys.
+     *
+     * @return array<string>
+     */
+    abstract public function keys(): array;
 
     /**
      * Get the instance as an array.
