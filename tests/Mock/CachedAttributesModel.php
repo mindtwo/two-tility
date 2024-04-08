@@ -16,10 +16,7 @@ class CachedAttributesModel extends \Illuminate\Database\Eloquent\Model
     public function getDataCaches(): ?array
     {
         return [
-            'data' => [
-                'class' => CachedAttributesDataCache::class,
-                'loadOnAccess' => true,
-            ],
+            'data' => CachedAttributesDataCache::class,
         ];
     }
 }

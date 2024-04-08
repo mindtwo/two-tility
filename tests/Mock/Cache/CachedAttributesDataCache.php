@@ -9,6 +9,10 @@ class CachedAttributesDataCache extends DataCache
 
     protected bool $loadOnAccess = true;
 
+    protected bool $loadOnlyOnce = true;
+
+    protected bool $allowEmpty = true;
+
     /**
      * Get cache key.
      */

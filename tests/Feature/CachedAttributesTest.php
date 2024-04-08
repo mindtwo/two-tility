@@ -15,6 +15,9 @@ it('can access cached attributes', function () {
     expect(Cache::has($cacheKey))->toBeFalse();
 
     expect($model->foo)->toBe('bar');
+
+    $model->withCache('data_cache');
+
     expect($model->baz)->toBe('qux');
 
     expect(Cache::has($cacheKey))->toBeTrue();

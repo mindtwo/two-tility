@@ -5,6 +5,7 @@ namespace mindtwo\TwoTility\Cache\Data;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use JsonSerializable;
 use Stringable;
 
@@ -50,6 +51,17 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      * Set to true if data cache should be loaded when an attribute is accessed.
      */
     protected bool $loadOnAccess = false;
+
+    /**
+     * Load only once.
+     * Set to true if data cache should be loaded only once.
+     */
+    protected bool $loadOnlyOnce = false;
+
+    /**
+     * Attempted load.
+     */
+    private bool $attemptedLoad = false;
 
     /**
      * DataCache constructor.
@@ -106,6 +118,22 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         $this->model->refresh();
 
         $this->loadDataCache(true);
+    }
+
+    /**
+     * Get cached data.
+     */
+    public function data(): array
+    {
+        if (! $this->allowEmpty && ! $this->isLoaded()) {
+            throw new \RuntimeException('Data cache is not loaded.');
+        }
+
+        if (empty($this->data)) {
+            return array_fill_keys($this->keys(), null);
+        }
+
+        return $this->data;
     }
 
     /**
@@ -179,6 +207,8 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     private function loadData(): void
     {
         $this->data = $this->cacheData();
+
+        $this->attemptedLoad = true;
     }
 
     /**
@@ -213,6 +243,10 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
 
     protected function canLoad(): bool
     {
+        if ($this->loadOnlyOnce && $this->attemptedLoad) {
+            return false;
+        }
+
         return true;
     }
 

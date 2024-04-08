@@ -51,14 +51,14 @@ trait HasCachedAttributes
 
     protected static function bootDataCaches($model)
     {
-        if (static::$disableCache || static::$disableCacheLoad) {
+        if (static::$disableCache) {
             return;
         }
 
         $dataCaches = $model->getDataCaches();
 
         foreach ($dataCaches as $key => $cache) {
-            $clz = $cache['class'] ?? false;
+            $clz = $cache;
 
             if (! $clz || ! is_a($clz, DataCache::class, true)) {
                 continue;
@@ -76,7 +76,10 @@ trait HasCachedAttributes
             if ($cache->loadOnRetrieved()) {
                 $model->loadsOnRetrieved[] = $key;
             }
+        }
 
+        if (static::$disableCacheLoad) {
+            return;
         }
 
         $model->loadDataCache(array_keys($model->loadsOnRetrieved));
@@ -120,18 +123,15 @@ trait HasCachedAttributes
         }
 
         $this->loadDataCache($this->loadsOnAccess);
-
         foreach ($this->loadedDataCaches as $key => $value) {
             if (! $value || ! $value instanceof DataCache) {
                 continue;
             }
 
-            $value = $value->get($name);
-
-            if ($value) {
-                // put attribute in cache on model
-                $this->retrievedCachedAttributes[$name] = $value;
-                return $value;
+            $cachedData = $value->data();
+            $this->retrievedCachedAttributes = array_merge($this->retrievedCachedAttributes, $cachedData);
+            if (array_key_exists($name, $cachedData)) {
+                return $cachedData[$name];
             }
         }
 
@@ -277,6 +277,7 @@ trait HasCachedAttributes
             $cache->load();
 
             $this->loadedDataCaches[$name] = $cache;
+
             return $this;
         }
 
