@@ -16,7 +16,7 @@ class CachedAttributesDataCache extends DataCache
     /**
      * Get cache key.
      */
-    protected function cacheKey(): string
+    public function cacheKey(): string
     {
         return cache_key('data_cache', [
             'class' => class_basename($this),

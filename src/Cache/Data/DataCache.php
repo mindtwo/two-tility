@@ -5,7 +5,6 @@ namespace mindtwo\TwoTility\Cache\Data;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use JsonSerializable;
 use Stringable;
 
@@ -87,11 +86,15 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function unload(): void
     {
-        if (! $this->isLoaded()) {
-            return;
+        if ($this->hasData()) {
+            $this->data = [];
         }
 
-        $this->cacheInstance()->forget($this->cacheKey());
+        if ($this->isDataCached()) {
+            $this->cacheInstance()->forget($this->cacheKey());
+        }
+
+        $this->attemptedLoad = false;
     }
 
     /**
@@ -125,7 +128,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function data(): array
     {
-        if (! $this->allowEmpty && ! $this->isLoaded()) {
+        if (! $this->allowEmpty && ! $this->hasData()) {
             throw new \RuntimeException('Data cache is not loaded.');
         }
 
@@ -190,6 +193,14 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     }
 
     /**
+     * Check if data cache is cached.
+     */
+    public function isDataCached(): bool
+    {
+        return $this->cacheInstance()->has($this->cacheKey());
+    }
+
+    /**
      * Check if data cache is loaded.
      */
     public function isLoaded(): bool
@@ -198,7 +209,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
             return false;
         }
 
-        return $this->cacheInstance()->has($this->cacheKey()) && $this->hasData();
+        return $this->isDataCached() && $this->hasData();
     }
 
     /**
@@ -226,7 +237,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     /**
      * Get cache key.
      */
-    protected function cacheKey(): string
+    public function cacheKey(): string
     {
         return cache_key('data_cache', [
             'class' => class_basename($this),
