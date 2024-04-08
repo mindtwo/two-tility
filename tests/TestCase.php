@@ -20,8 +20,15 @@ class TestCase extends Orchestra
             $table->string('foo')->nullable();
         });
 
+        Schema::create('cached_attributes', function ($table) {
+            $table->increments('id');
+        });
+
         $this->beforeApplicationDestroyed(
-            fn () => Schema::drop('busting_models')
+            function () {
+                Schema::drop('busting_models');
+                Schema::drop('cached_attributes');
+            },
         );
     }
 
