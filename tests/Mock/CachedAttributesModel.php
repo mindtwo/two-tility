@@ -13,6 +13,10 @@ class CachedAttributesModel extends \Illuminate\Database\Eloquent\Model
 
     public $timestamps = false;
 
+    public $loadOnAccess = true;
+
+    public $allowEmpty = true;
+
     public function getDataCaches(): ?array
     {
         return [

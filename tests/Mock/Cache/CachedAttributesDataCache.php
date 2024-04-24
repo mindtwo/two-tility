@@ -2,6 +2,7 @@
 
 namespace mindtwo\TwoTility\Tests\Mock\Cache;
 
+use Illuminate\Support\Facades\Log;
 use mindtwo\TwoTility\Cache\Data\DataCache;
 
 class CachedAttributesDataCache extends DataCache
@@ -38,4 +39,15 @@ class CachedAttributesDataCache extends DataCache
             'baz' => 'qux',
         ];
     }
+
+    public function loadOnAccess(): bool
+    {
+        return $this->model->loadOnAccess;
+    }
+
+    public function allowEmpty(): bool
+    {
+        return $this->model->allowEmpty;
+    }
+
 }

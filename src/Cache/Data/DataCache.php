@@ -128,7 +128,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function data(): array
     {
-        if (! $this->allowEmpty && ! $this->hasData()) {
+        if (! $this->allowEmpty() && ! $this->hasData()) {
             throw new \RuntimeException('Data cache is not loaded.');
         }
 
@@ -227,7 +227,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     private function saveData(): void
     {
-        if (empty($this->data) && ! $this->allowEmpty) {
+        if (empty($this->data) && ! $this->allowEmpty()) {
             return;
         }
 
@@ -259,6 +259,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         }
 
         return true;
+    }
+
+    public function allowEmpty(): bool
+    {
+        return $this->allowEmpty;
     }
 
     public function loadOnRetrieved(): bool
