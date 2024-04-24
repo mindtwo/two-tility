@@ -24,7 +24,7 @@ it('can access cached attributes', function () {
     expect(Cache::has($cacheKey))->toBeTrue();
 });
 
-it('can access cached attributes if empty not allowed', function () {
+it('can`t access cached attributes if empty and load on access not allowed', function () {
     $model = new \mindtwo\TwoTility\Tests\Mock\CachedAttributesModel();
 
     $model->loadOnAccess = false;
@@ -39,8 +39,8 @@ it('can access cached attributes if empty not allowed', function () {
     // check that cache key does not exist
     expect(Cache::has($cacheKey))->toBeFalse();
 
-    expect($model->foo)->toBe('bar');
-    expect($model->baz)->toBe('qux');
+    expect($model->foo)->toBe(null);
+    expect($model->baz)->toBe(null);
 
-    expect(Cache::has($cacheKey))->toBeTrue();
+    expect(Cache::has($cacheKey))->toBeFalse();
 });
