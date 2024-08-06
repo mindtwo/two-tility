@@ -7,7 +7,7 @@ if (! function_exists('cache_key')) {
      * Get a new KeyGenerator instance from Cache Utility.
      *
      * @param  string|null  $name
-     * @param  null|array<string,string>  $options  - Options for the KeyGenerator instance. If null it will use the value of config('two-tility.cache.default_options'). See KeyGenerator::make() for details.
+     * @param  null|array<string>|array<string,mixed>  $options  - Options for the KeyGenerator instance. If null it will use the value of config('two-tility.cache.default_options'). See KeyGenerator::make() for details.
      * @return \mindtwo\TwoTility\Cache\KeyGenerator|mixed
      */
     function cache_key($name = null, $options = null)
