@@ -69,16 +69,17 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     public function __construct(
         protected $model,
-    ) {
-    }
+    ) {}
 
-    public function load(): void
+    public function load(): static
     {
         if (! $this->canLoad()) {
-            return;
+            return $this;
         }
 
         $this->loadDataCache();
+
+        return $this;
     }
 
     /**
@@ -125,6 +126,8 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
 
     /**
      * Get cached data.
+     *
+     * @return array<string, mixed>
      */
     public function data(): array
     {
@@ -215,7 +218,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     /**
      * Load the data.
      */
-    private function loadData(): void
+    protected function loadData(): void
     {
         $this->data = $this->cacheData();
 
@@ -225,7 +228,7 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     /**
      * Save the data if applicable.
      */
-    private function saveData(): void
+    protected function saveData(): void
     {
         if (empty($this->data) && ! $this->allowEmpty()) {
             return;
