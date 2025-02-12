@@ -42,13 +42,13 @@ expect()->extend('toBeStringable', function () {
 */
 function reqHeader(string $headerName, string $value)
 {
-    //create a request
-    $request = new Request();
+    // create a request
+    $request = new Request;
 
-    //replace the empty request header with an array
+    // replace the empty request header with an array
     $request->headers->replace([$headerName => $value]);
 
-    //bind the request
+    // bind the request
     app()->instance('request', $request);
 
     // return request()->header($headerName);

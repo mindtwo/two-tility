@@ -62,6 +62,8 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
      */
     private bool $attemptedLoad = false;
 
+    private bool $serializeable = true;
+
     /**
      * DataCache constructor.
      *
@@ -238,6 +240,17 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     }
 
     /**
+     * Set data.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function setData(array $data): void
+    {
+        $this->data = $data;
+        $this->attemptedLoad = true;
+    }
+
+    /**
      * Get cache key.
      */
     public function cacheKey(): string
@@ -287,6 +300,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         $driver = $this->cacheDriver ?? config('cache.default');
 
         return Cache::store($driver);
+    }
+
+    public function serializeable(): bool
+    {
+        return $this->serializeable;
     }
 
     /**

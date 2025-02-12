@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Cache;
 
 it('busts cache key on model events', function () {
-    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel();
+    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel;
     $model->save();
 
     Cache::put('test-key-1', 'foo');
@@ -14,7 +14,7 @@ it('busts cache key on model events', function () {
 });
 
 it('busts cache keys on model events', function () {
-    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel();
+    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel;
     $model->save();
 
     $model->cacheKeysToBust = [
@@ -35,7 +35,7 @@ it('busts cache keys on model events', function () {
 });
 
 it('busts cache keys on model events with closure', function () {
-    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel();
+    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel;
     $model->save();
 
     $model->cacheKeysToBust = [
@@ -51,8 +51,6 @@ it('busts cache keys on model events with closure', function () {
     $fn = (function () {
         return 'test-key-3';
     });
-
-    // dd($fn instanceof \Closure && is_string($value = $fn()));
 
     Cache::put('test-key-1', 'foo');
     Cache::put('test-key-2', 'foo');
@@ -70,7 +68,7 @@ it('busts cache keys on model events with closure', function () {
 });
 
 it('busts cache keys on model event with cache_key helper', function () {
-    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel();
+    $model = new \mindtwo\TwoTility\Tests\Mock\BustingModel;
     $model->save();
 
     $model->cacheKeysToBust = [

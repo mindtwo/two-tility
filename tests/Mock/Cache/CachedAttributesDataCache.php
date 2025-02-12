@@ -2,12 +2,10 @@
 
 namespace mindtwo\TwoTility\Tests\Mock\Cache;
 
-use Illuminate\Support\Facades\Log;
 use mindtwo\TwoTility\Cache\Data\DataCache;
 
 class CachedAttributesDataCache extends DataCache
 {
-
     protected bool $loadOnAccess = true;
 
     protected bool $loadOnlyOnce = true;
@@ -49,5 +47,4 @@ class CachedAttributesDataCache extends DataCache
     {
         return $this->model->allowEmpty;
     }
-
 }
