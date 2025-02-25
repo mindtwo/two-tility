@@ -88,9 +88,10 @@ class KeyGenerator implements JsonSerializable, Stringable
     {
         $user = auth()->user();
 
+        $updated_at = $user?->updated_at?->timestamp ?? null;
+
         return $this->addParam('auth_id', $user?->id.'')
-            // @phpstan-ignore-next-line - we check if property exists
-            ->addParamIf(property_exists($user, 'updated_at'), 'auth_updated_at', $user->updated_at->timestamp);
+            ->addParamIf($updated_at !== null, 'auth_updated_at', $updated_at);
     }
 
     /**
