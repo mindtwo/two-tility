@@ -18,3 +18,17 @@ if (! function_exists('cache_key')) {
         return KeyGenerator::make($name, $options);
     }
 }
+
+if (! function_exists('cache_key_str')) {
+    /**
+     * Get a new KeyGenerator instance from Cache Utility.
+     *
+     * @param  string|null  $name
+     * @param  null|array<string>|array<string,mixed>  $options  - Options for the KeyGenerator instance. If null it will use the value of config('two-tility.cache.default_options'). See KeyGenerator::make() for details.
+     * @return string
+     */
+    function cache_key_str($name = null, $options = null)
+    {
+        return cache_key($name, $options)->toString();
+    }
+}
