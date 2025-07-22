@@ -13,7 +13,7 @@
 
 use Illuminate\Http\Request;
 
-uses(\mindtwo\TwoTility\Tests\TestCase::class)->in('Unit', 'Feature');
+uses(\mindtwo\TwoTility\Tests\TestCase::class)->in(__DIR__);
 
 /*
 |--------------------------------------------------------------------------

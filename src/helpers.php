@@ -32,3 +32,28 @@ if (! function_exists('cache_key_str')) {
         return cache_key($name, $options)->toString();
     }
 }
+
+if (! function_exists('withTemporaryScope')) {
+    /**
+     * Temporarily changes a scoped value for the duration of the callback.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @param  callable(): mixed  $getter
+     * @param  callable(mixed): void  $setter
+     * @return T
+     */
+    function withTemporaryScope(callable $callback, callable $getter, callable $setter, mixed $temporaryValue): mixed
+    {
+        $originalValue = $getter();
+
+        try {
+            $setter($temporaryValue);
+
+            return $callback();
+        } finally {
+            $setter($originalValue);
+        }
+    }
+}
