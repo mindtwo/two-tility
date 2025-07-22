@@ -35,14 +35,25 @@ if (! function_exists('cache_key_str')) {
 
 if (! function_exists('withTemporaryScope')) {
     /**
-     * Temporarily changes a scoped value for the duration of the callback.
+     * Temporarily override a scope or value for the duration of a callback,
+     * and restore the original value afterward (even if an exception is thrown).
      *
-     * @template T
+     * This is useful for temporarily changing instance or static properties,
+     * config flags, global states, or other scoped settings in a safe and
+     * reversible way.
      *
-     * @param  callable(): T  $callback
-     * @param  callable(): mixed  $getter
-     * @param  callable(mixed): void  $setter
-     * @return T
+     * Example use cases:
+     * - Disabling logging or validation inside a block
+     * - Temporarily overriding a model's internal flag
+     * - Switching environment-dependent behavior
+     *
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback  The operation to perform while the temporary value is applied.
+     * @param  callable(): mixed  $getter  Retrieves the current/original value of the scope.
+     * @param  callable(mixed): void  $setter  Sets a new value for the scope.
+     * @param  mixed  $temporaryValue  The temporary value to apply during the callback execution.
+     * @return TReturn The result of the callback.
      */
     function withTemporaryScope(callable $callback, callable $getter, callable $setter, mixed $temporaryValue): mixed
     {
