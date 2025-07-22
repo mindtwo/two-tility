@@ -44,7 +44,7 @@ if (! function_exists('withTemporaryScope')) {
      *
      * Example use cases:
      * - Disabling logging or validation inside a block
-     * - Temporarily overriding a model's internal flag
+     * - Temporarily overriding a model's internal flagu
      * - Switching environment-dependent behavior
      *
      * @template TReturn
