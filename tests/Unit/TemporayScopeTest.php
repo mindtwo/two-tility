@@ -39,3 +39,38 @@ it('can be used on config', function () {
     expect($result)->toEqual($temporaryValue);
     expect(config('app.name'))->toEqual($originalValue);
 });
+
+it('can be used on objects', function () {
+    $object = new class
+    {
+        private $property = 'original';
+
+        public function getProperty()
+        {
+            return $this->property;
+        }
+
+        public function setProperty($value)
+        {
+            $this->property = $value;
+        }
+    };
+
+    $temporaryValue = 'temporary';
+
+    $getter = function () use ($object) {
+        return $object->getProperty();
+    };
+
+    $result = withTemporaryScope(
+        function () use ($getter) {
+            return $getter();
+        },
+        $getter,
+        function ($value) use ($object) {
+            $object->setProperty($value);
+        }, $temporaryValue);
+
+    expect($result)->toEqual($temporaryValue);
+    expect($object->getProperty())->toEqual('original');
+});
