@@ -6,7 +6,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use mindtwo\TwoTility\Testing\Api\DefinitionFaker;
-use mindtwo\TwoTility\Testing\Api\Parsers\YamlFakeApiParser;
+use mindtwo\TwoTility\Testing\Contracts\SpecParserInterface;
 
 class ApiFake
 {
@@ -448,7 +448,15 @@ class ApiFake
         return $this;
     }
 
-    public function bootFromParser(YamlFakeApiParser $parser): self
+    /**
+     * Boot the API fake from a YAML parser.
+     *
+     * This method initializes the API fake with paths, faker definitions, and auth requirements
+     * parsed from a YAML file.
+     *
+     * @param  SpecParserInterface  $parser  The parser instance containing the parsed API spec.
+     */
+    public function bootFromParser(SpecParserInterface $parser): self
     {
         return $this->bootFromParsed(
             $parser->getPaths(),
