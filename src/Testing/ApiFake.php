@@ -13,6 +13,7 @@ class ApiFake
     /**
      * The memory store for the fake API.
      * [path][scope][id => data]
+     * TODO: persist this store to a file or database if needed.
      *
      * @var array<string, array<string, array<string, mixed>>>
      */
@@ -70,11 +71,19 @@ class ApiFake
      */
     protected ?\Closure $scopeResolver = null;
 
+    /**
+     * Create a new instance of the ApiFake class.
+     *
+     * @param  string  $baseUrl  The base URL for the fake API.
+     */
     public function __construct(string $baseUrl)
     {
         $this->baseUrl = rtrim($baseUrl, '/');
     }
 
+    /**
+     * Initialize the fake API with parsed paths, faker definitions, and auth requirements.
+     */
     public function fake(): void
     {
         Http::fake([
