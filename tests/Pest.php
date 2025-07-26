@@ -12,8 +12,13 @@
 */
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 
-uses(\mindtwo\TwoTility\Tests\TestCase::class)->in(__DIR__);
+uses(\mindtwo\TwoTility\Tests\TestCase::class)
+    ->beforeEach(function () {
+        Http::preventStrayRequests();
+    })
+    ->in(__DIR__);
 
 /*
 |--------------------------------------------------------------------------

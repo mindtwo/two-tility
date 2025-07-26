@@ -1,0 +1,65 @@
+paths:
+  /users:
+    faker:
+      id: uuid
+      name: name
+      email: safeEmail
+      role: ['admin', 'editor', 'viewer']
+    list:
+      authRequired: true
+      method: GET
+      responses:
+        '200':
+          example:
+            - id: 1
+              name: John Doe
+              email: test@example.com
+              role: admin
+    show:
+      path: /users/{id}
+      authRequired: true
+      method: GET
+      responses:
+        '200':
+          example:
+            id: 1
+            name: John Doe
+            email: john@example.com
+            role: admin
+    create:
+      authRequired: true
+      method: POST
+      responses:
+        '200':
+          example:
+            id: 2
+            name: Jane Smith
+            email: jane@example.com
+            role: editor
+
+  /products:
+    faker:
+      id: uuid
+      title: word
+      price: randomFloat(2, 10, 100)
+      available: boolean
+    list:
+      authRequired: false
+      method: GET
+      responses:
+        '200':
+          example:
+            - id: 101
+              title: Sample Product
+              price: 49.99
+              available: true
+    create:
+      authRequired: true
+      method: POST
+      responses:
+        '200':
+          example:
+            id: 102
+            title: New Product
+            price: 29.99
+            available: false

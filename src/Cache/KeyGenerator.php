@@ -88,7 +88,7 @@ class KeyGenerator implements JsonSerializable, Stringable
     {
         $user = auth()->user();
 
-        $updated_at = $user?->updated_at?->timestamp ?? null;
+        $updated_at = $user?->updated_at->timestamp ?? null;
 
         return $this->addParam('auth_id', $user?->id.'')
             ->addParamIf($updated_at !== null, 'auth_updated_at', $updated_at);

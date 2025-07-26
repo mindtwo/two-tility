@@ -5,6 +5,7 @@ namespace mindtwo\TwoTility\Cache\Models;
 use Illuminate\Support\Facades\Log;
 use mindtwo\TwoTility\Cache\KeyGenerator;
 
+// @phpstan-ignore-next-line
 trait BustsCacheKeys
 {
     public static function bootBustsCacheKeys()
