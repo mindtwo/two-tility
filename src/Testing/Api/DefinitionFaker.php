@@ -4,7 +4,6 @@ namespace mindtwo\TwoTility\Testing\Api;
 
 use Closure;
 use Faker\Factory as FakerFactory;
-use Illuminate\Support\Collection;
 use UnitEnum;
 
 class DefinitionFaker
@@ -42,8 +41,9 @@ class DefinitionFaker
             return $this->faker->randomElement($value::cases());
         }
 
-        if (is_array($value) || $value instanceof Collection) {
-            return $this->faker->randomElement($value);
+        if (is_array($value)) {
+            // Recurse arrays and associative maps
+            return array_map(fn ($v) => $this->resolve($v), $value);
         }
 
         if ($value instanceof Closure) {
@@ -51,13 +51,90 @@ class DefinitionFaker
         }
 
         if (is_string($value)) {
-            try {
-                return $this->faker->format($value);
-            } catch (\InvalidArgumentException) {
-                return $value;
-            }
+            return $this->resolveExpression($value);
         }
 
         return $value;
+    }
+
+    /**
+     * Resolve a string expression to a Faker value.
+     *
+     * Supports function-style expressions like 'func(arg)' or 'func()'.
+     * Falls back to standard Faker formatters if the expression is not recognized.
+     */
+    protected function resolveExpression(string $expression): mixed
+    {
+        // Match function-style: func(arg) or func()
+        if (preg_match('/^(?<func>\w+)\((?<args>.*)\)$/', $expression, $match)) {
+            $function = $match['func'];
+            $args = trim($match['args']);
+
+            return match ($function) {
+                'randomElement' => $this->faker->randomElement(json_decode($args, true)),
+                'optional' => $this->faker->optional()->{$args}(),
+                default => $this->faker->{$function}(...$this->parseArgs($args)),
+            };
+        }
+
+        // fallback to standard formatters: 'uuid', 'email', etc.
+        try {
+            return $this->faker->format($expression);
+        } catch (\Throwable) {
+            return $expression;
+        }
+    }
+
+    /**
+     * Parse arguments from a string into an array.
+     *
+     * Handles both single and multiple arguments, trimming whitespace.
+     * Supports quoted strings, numbers, booleans, and null values.
+     *
+     * @return array<mixed>
+     */
+    protected function parseArgs(string $args): array
+    {
+        $args = trim($args);
+
+        // Try full JSON decode if single array
+        if (str_starts_with($args, '[') && str_ends_with($args, ']')) {
+            $decoded = json_decode($args, true);
+
+            return is_array($decoded) ? $decoded : [$args];
+        }
+
+        // Try decoding a list of arguments: supports "quoted", numbers, etc.
+        $result = [];
+        $pattern = '/
+            (?:\s*)               # optional whitespace
+            (                     # capture group
+                "(?:[^"\\\\]*(?:\\\\.[^"\\\\]*)*)"  # quoted string with escaping
+                | \'(?:[^\']*)\'  # single-quoted string
+                | [^,]+           # unquoted word or number
+            )
+            (?:\s*,\s*|$)         # separator or end
+        /x';
+
+        preg_match_all($pattern, $args, $matches);
+
+        foreach ($matches[1] as $arg) {
+            $arg = trim($arg, '"\' ');
+
+            // Try cast
+            if (is_numeric($arg)) {
+                $result[] = strpos($arg, '.') !== false ? (float) $arg : (int) $arg;
+            } elseif (strtolower($arg) === 'null') {
+                $result[] = null;
+            } elseif (strtolower($arg) === 'true') {
+                $result[] = true;
+            } elseif (strtolower($arg) === 'false') {
+                $result[] = false;
+            } else {
+                $result[] = $arg;
+            }
+        }
+
+        return $result;
     }
 }

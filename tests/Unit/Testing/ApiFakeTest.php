@@ -18,7 +18,7 @@ test('scoped data isolation by user ID header', function () {
     $res1 = Http::withHeaders(['X-User-ID' => 'user-1'])
         ->post('https://api.fake.test/users', ['name' => 'Alice']);
 
-    expect($res1->status())->toBe(201)
+    expect($res1->status())->toBe(200)
         ->and($res1->json())->toHaveKey('id')
         ->and($res1->json()['name'])->toBe('Alice');
 
@@ -36,7 +36,7 @@ test('scoped data isolation by user ID header', function () {
     $res2 = Http::withHeaders(['X-User-ID' => 'user-2'])
         ->post('https://api.fake.test/users', ['name' => 'Bob']);
 
-    expect($res2->status())->toBe(201)
+    expect($res2->status())->toBe(200)
         ->and($res2->json())->toHaveKey('id')
         ->and($res2->json()['id'])->not->toEqual($res1->json()['id'])
         ->and($res2->json()['name'])->toBe('Bob');

@@ -19,7 +19,7 @@ it('creates an array based on passed definition', function () {
         'birthday' => 'date',
         'place' => 'city',
         'gender' => GenderEnum::class,
-        'hobbies' => ['reading', 'coding', 'gaming'],
+        'hobbies' => 'randomElement(["reading", "coding", "gaming"])',
         'resolved' => fn () => strtoupper('custom value'),
     ]);
 

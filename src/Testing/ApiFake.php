@@ -2,22 +2,21 @@
 
 namespace mindtwo\TwoTility\Testing;
 
+use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use mindtwo\TwoTility\Helper\Hookable;
 use mindtwo\TwoTility\Testing\Api\DefinitionFaker;
+use mindtwo\TwoTility\Testing\Api\Stores\FakeArrayStore;
 use mindtwo\TwoTility\Testing\Contracts\SpecParserInterface;
 
 class ApiFake
 {
-    /**
-     * The memory store for the fake API.
-     * [path][scope][id => data]
-     * TODO: persist this store to a file or database if needed.
-     *
-     * @var array<string, array<string, array<string, mixed>>>
-     */
-    protected array $store = [];
+    /** @use Hookable<'init'|'create'|'creating'|'created'|'showing'|'updating'|'updated'|'deleting'|'deleted'> */
+    use Hookable;
+
+    protected FakeArrayStore $store;
 
     /** @var array<string, array<string, bool>> */
     protected array $authRequired = [];
@@ -72,6 +71,16 @@ class ApiFake
     protected ?\Closure $scopeResolver = null;
 
     /**
+     * The response formatter for the fake API.
+     *
+     * This can be used to format the responses returned by the fake API.
+     * It is set to null by default, meaning no custom formatting is applied.
+     *
+     * @var null|callable
+     */
+    protected $responseFormatter = null;
+
+    /**
      * Create a new instance of the ApiFake class.
      *
      * @param  string  $baseUrl  The base URL for the fake API.
@@ -79,6 +88,8 @@ class ApiFake
     public function __construct(string $baseUrl)
     {
         $this->baseUrl = rtrim($baseUrl, '/');
+        $this->store = new FakeArrayStore;
+
     }
 
     /**
@@ -103,21 +114,40 @@ class ApiFake
                     return Http::response(['error' => 'Unauthorized'], 401);
                 }
 
-                // TODO: serveOperation to direct to the correct handler
-                // TODO: allow overrides for the handlers
-
-                // return $this->serveOperation($path, $method, $operation, $request);
                 // Match the method and handle the request accordingly
-                match ($method) {
-                    'POST' => $this->handleCreate($path, $request),
-                    'GET' => $this->handleRead($path, $request),
-                    'PUT', 'PATCH' => $this->handleUpdate($path, $request),
-                    'DELETE' => $this->handleDelete($path, $request),
-                    default => $this->lastResponse = Http::response(['error' => 'Unsupported method'], 405),
-                };
+                $this->lastResponse = $this->serveOperation($path, $method, $operation, $request);
 
                 return $this->lastResponse;
             }]);
+
+        $this->runHooks('init', $this);
+    }
+
+    /**
+     * Serve the operation based on the path, method, and request.
+     */
+    protected function serveOperation(string $path, string $method, string $operation, Request $request): PromiseInterface
+    {
+        // Get method handler name
+        $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operation);
+
+        if (method_exists($this, $handlerMethod)) {
+            return $this->{$handlerMethod}($path, $request, $method);
+        }
+
+        $result = match ($operation) {
+            'list' => $this->handleList($path, $request, $method),
+            'show' => $this->handleShow($path, $request, $method),
+            'create' => $this->handleCreate($path, $request, $method),
+            'update' => $this->handleUpdate($path, $request, $method),
+            'delete' => $this->handleDelete($path, $request, $method),
+            default => Http::response(['error' => 'Unsupported method'], 405),
+        };
+
+        $formatted = $this->formatResponse($result, $path, $method, $operation);
+
+        return Http::response($formatted, $result instanceof PromiseInterface ? $result->status() : 200);
+
     }
 
     /**
@@ -125,24 +155,59 @@ class ApiFake
      *
      * @param  string  $path  The path of the request, which includes the collection and item ID.
      * @param  Request  $request  The request object containing the data to create.
+     * @param  string  $method  The HTTP method of the request (e.g., 'POST').
      */
-    protected function handleCreate(string $path, Request $request): void
+    protected function handleCreate(string $path, Request $request, string $method): mixed
     {
         $id = $this->generateId($path, $request);
         $scope = $this->resolveScopeKey($request);
 
+        // If the scope is a string, convert it to a closure that returns the scope
         $item = array_merge($request->data(), ['id' => $id]);
 
-        $this->store[$path][$scope][$id] = $item;
-        $this->lastResponse = Http::response($item, 201);
+        // Run hooks for creating the item
+        $this->runHooks('creating', $item, $path, $request);
+
+        $this->store->add($path, $scope, $id, $item);
+
+        // Run hooks for created item
+        $this->runHooks('created', $item, $path, $request);
+
+        return $item;
     }
 
     /**
-     * Handle GET requests to retrieve an item or collection from the store.
+     * Handle GET requests to retrieve a collection from the store.
      *
      * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  Request  $request  The request object.
+     * @param  string  $method  The HTTP method of the request (e.g, 'GET').
+     * @return mixed The response data.
      */
-    protected function handleRead(string $path, Request $request): void
+    protected function handleList(string $path, Request $request, string $method): mixed
+    {
+        // Resolve the scope key based on the request
+        $scope = $this->resolveScopeKey($request);
+
+        if (! $this->store->has($path, $scope)) {
+            return [];
+        }
+
+        // Get the list of items in the collection
+        $list = array_values($this->store->get($path, $scope));
+
+        return $list;
+    }
+
+    /**
+     * Handle GET requests to retrieve an item from the store.
+     *
+     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  Request  $request  The request object.
+     * @param  string  $method  The HTTP method of the request (e.g, 'GET').
+     * @return mixed The response data.
+     */
+    protected function handleShow(string $path, Request $request, string $method): mixed
     {
         $id = basename($path);
         $collectionPath = dirname($path);
@@ -150,17 +215,16 @@ class ApiFake
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (isset($this->store[$collectionPath][$scope][$id])) {
-            $entry = $this->store[$collectionPath][$scope][$id];
+        if (! $this->store->has($collectionPath, $scope, $id)) {
+            return ['error' => 'Not found'];
 
-            $this->lastResponse = Http::response($entry);
-        } elseif (isset($this->store[$path][$scope])) {
-            $list = $this->store[$path][$scope];
-
-            $this->lastResponse = Http::response(array_values($list));
-        } else {
-            $this->lastResponse = Http::response(['error' => 'Not found'], 404);
         }
+        // Get the item from the store
+        $item = $this->store->get($collectionPath, $scope, $id);
+
+        $this->runHooks('showing', $item, $path, $request);
+
+        return $item;
     }
 
     /**
@@ -168,8 +232,9 @@ class ApiFake
      *
      * @param  string  $path  The path of the request, which includes the collection and item ID.
      * @param  Request  $request  The request object containing the data to update.
+     * @param  string  $method  The HTTP method of the request (e.g., 'PUT', 'PATCH').
      */
-    protected function handleUpdate(string $path, Request $request): void
+    protected function handleUpdate(string $path, Request $request, string $method): mixed
     {
         $id = basename($path);
         $collectionPath = dirname($path);
@@ -177,15 +242,24 @@ class ApiFake
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (isset($this->store[$collectionPath][$scope][$id])) {
-            $this->store[$collectionPath][$scope][$id] = array_merge(
-                $this->store[$collectionPath][$scope][$id],
-                $request->data()
-            );
+        if ($this->store->has($collectionPath, $scope, $id)) {
 
-            $this->lastResponse = Http::response($this->store[$collectionPath][$id]);
+            // after
+            $item = $this->store->get($collectionPath, $scope, $id);
+
+            // Run hooks for updating the item
+            $this->runHooks('updating', $item, $path, $request);
+
+            // Update the item with the new data
+            $item = array_merge($item, $request->data());
+            $this->store->put($collectionPath, $scope, $id, $item);
+
+            // Run hooks for updated item
+            $this->runHooks('updated', $item, $path, $request);
+
+            return $item;
         } else {
-            $this->lastResponse = Http::response(['error' => 'Not found'], 404);
+            return ['error' => 'Not found'];
         }
     }
 
@@ -193,27 +267,36 @@ class ApiFake
      * Handle DELETE requests to remove an item from the store.
      *
      * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  Request  $request  The request object.
+     * @param  string  $method  The HTTP method of the request (e.g. 'DELETE').
      */
-    protected function handleDelete(string $path, Request $request): void
+    protected function handleDelete(string $path, Request $request, string $method): mixed
     {
-        $key = md5($path); // fallback when there's no request body
-
+        $id = basename($path);
+        $collectionPath = dirname($path);
         $scope = $this->resolveScopeKey($request);
 
-        if (isset($this->store[$path][$scope][$key])) {
-            unset($this->store[$path][$scope][$key]);
-            $this->lastResponse = Http::response(null, 204);
+        if ($this->store->has($collectionPath, $scope, $id)) {
+            // Run hooks for deleting the item
+            $this->runHooks('deleting', $id, $collectionPath, $request);
+
+            $this->store->remove($collectionPath, $scope, $id);
+
+            // Run hooks for deleted item
+            $this->runHooks('deleted', $id, $collectionPath, $request);
+
+            return null;
         } else {
-            $this->lastResponse = Http::response(['error' => 'Not found'], 404);
+            return ['error' => 'Not found'];
         }
     }
 
     /**
      * Reset the store to an empty state.
      */
-    public function reset(): void
+    public function clear(): void
     {
-        $this->store = [];
+        $this->store->clear();
     }
 
     /**
@@ -230,10 +313,10 @@ class ApiFake
      * @param  string  $path  The path of the request, which includes the collection.
      * @param  ?array<string, mixed>  $definition  The definition for the item to be created.
      * @param  array<string, mixed>  $overrides  Optional overrides for the item.
-     * @param  string  $scope  The scope under which the items are created (e.g., 'anonymous', 'user-1').
+     * @param  string|callable  $scope  The scope under which the items are created (e.g., 'anonymous', 'user-1').
      * @return array<string, mixed> The created item with an ID.
      */
-    public function addItem(string $path, ?array $definition = null, array $overrides = [], string $scope = 'anonymous'): array
+    public function addItem(string $path, ?array $definition = null, array $overrides = [], string|callable $scope = 'anonymous'): array
     {
         $faker = new DefinitionFaker;
 
@@ -247,7 +330,16 @@ class ApiFake
         $id = $item['id'] ?? $this->generateId($path, null);
         $item['id'] = $id;
 
-        $this->store[$path][$scope][$id] = $item;
+        // If the scope is a string, convert it to a closure that returns the scope
+        if (is_string($scope)) {
+            $scope = function () use ($scope) {
+                return $scope;
+            };
+        }
+        $scope = call_user_func($scope);
+
+        // Add the item to the store
+        $this->store->add($path, $scope, $id, $item);
 
         return $item;
     }
@@ -259,10 +351,10 @@ class ApiFake
      * @param  int  $count  The number of items to add.
      * @param  ?array<string, mixed>  $definition  The definition for the item to be created.
      * @param  array<string, mixed>  $overrides  Optional overrides for each item.
-     * @param  string  $scope  The scope under which the items are created (e.g., 'anonymous', 'user-1').
+     * @param  string|callable  $scope  The scope under which the items are created (e.g., 'anonymous', 'user-1').
      * @return array<array<string, mixed>> An array of created items.
      */
-    public function addItems(string $path, int $count = 1, ?array $definition = null, array $overrides = [], string $scope = 'anonymous'): array
+    public function addItems(string $path, int $count = 1, ?array $definition = null, array $overrides = [], string|callable $scope = 'anonymous'): array
     {
         $items = [];
         for ($i = 0; $i < $count; $i++) {
@@ -302,7 +394,7 @@ class ApiFake
 
         $regex = preg_replace(
             '#\{id\}#',
-            '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',
+            '[0-9a-f\-]{36}',
             $key
         );
 
@@ -332,6 +424,32 @@ class ApiFake
         }
 
         return null;
+    }
+
+    /**
+     * Format the response using a custom formatter.
+     *
+     * This allows you to define how the response should be formatted before returning it.
+     *
+     * @param  callable  $formatter  The callback function that formats the response.
+     */
+    public function formatResponseUsing(callable $formatter): self
+    {
+        $this->responseFormatter = $formatter;
+
+        return $this;
+    }
+
+    /**
+     * Format the response based on the provided formatter or return the raw response.
+     */
+    protected function formatResponse(mixed $response, string $path, string $method, string $operation = ''): mixed
+    {
+        if ($this->responseFormatter) {
+            return call_user_func($this->responseFormatter, $response ?? [], $path, $method, $operation);
+        }
+
+        return $response;
     }
 
     /**
@@ -372,9 +490,11 @@ class ApiFake
      *
      * @param  \Closure  $callback  The callback function that takes the path, method, and request.
      */
-    public function setAuthResolver(\Closure $callback): void
+    public function setAuthResolver(\Closure $callback): self
     {
         $this->authResolver = $callback;
+
+        return $this;
     }
 
     /**
@@ -408,9 +528,11 @@ class ApiFake
      *
      * @param  \Closure  $callback  The callback function that takes the request and returns a scope key.
      */
-    public function setScopeResolver(\Closure $callback): void
+    public function setScopeResolver(\Closure $callback): self
     {
         $this->scopeResolver = $callback;
+
+        return $this;
     }
 
     /**

@@ -68,3 +68,19 @@ if (! function_exists('withTemporaryScope')) {
         }
     }
 }
+
+if (! function_exists('pascalCasePath')) {
+    /**
+     * Convert a path string to PascalCase format.
+     *
+     * @param  string  $path  The path to convert.
+     * @return string The converted PascalCase string.
+     */
+    function pascalCasePath(string $path): string
+    {
+        return collect(explode('/', trim($path, '/')))
+            ->filter(fn ($segment) => ! str_starts_with($segment, '{')) // remove dynamic segments
+            ->map(fn ($segment) => str_replace(' ', '', ucwords(str_replace('-', ' ', $segment))))
+            ->implode('');
+    }
+}
