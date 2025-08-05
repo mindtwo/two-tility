@@ -88,8 +88,7 @@ class ApiFake
     public function __construct(string $baseUrl)
     {
         $this->baseUrl = rtrim($baseUrl, '/');
-        $this->store = new FakeArrayStore;
-
+        $this->store = app(FakeArrayStore::class);
     }
 
     /**
@@ -128,7 +127,27 @@ class ApiFake
      */
     protected function serveOperation(string $path, string $method, string $operation, Request $request): PromiseInterface
     {
-        // Get method handler name
+        // For nested operations like /collection/{resource}/operation, try custom handler first
+        $operationName = $this->extractOperationName($path);
+        $collectionName = $this->extractCollectionName($path);
+        
+        if ($operationName && $collectionName) {
+            // Try method like getCollectionResourceOperation
+            $nestedHandlerMethod = strtolower($method) . ucfirst($collectionName) . 'Resource' . ucfirst($operationName);
+            
+            if (method_exists($this, $nestedHandlerMethod)) {
+                return $this->{$nestedHandlerMethod}($path, $request, $method);
+            }
+            
+            // Try method like handleCustomOperation
+            $customHandlerMethod = 'handle' . ucfirst($operationName);
+            
+            if (method_exists($this, $customHandlerMethod)) {
+                return $this->{$customHandlerMethod}($path, $request, $method);
+            }
+        }
+
+        // Get method handler name for standard operations
         $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operation);
 
         if (method_exists($this, $handlerMethod)) {
@@ -146,7 +165,7 @@ class ApiFake
 
         $formatted = $this->formatResponse($result, $path, $method, $operation);
 
-        return Http::response($formatted, $result instanceof PromiseInterface ? $result->status() : 200);
+        return Http::response($formatted, 200);
 
     }
 
@@ -217,7 +236,6 @@ class ApiFake
 
         if (! $this->store->has($collectionPath, $scope, $id)) {
             return ['error' => 'Not found'];
-
         }
         // Get the item from the store
         $item = $this->store->get($collectionPath, $scope, $id);
@@ -243,7 +261,6 @@ class ApiFake
         $scope = $this->resolveScopeKey($request);
 
         if ($this->store->has($collectionPath, $scope, $id)) {
-
             // after
             $item = $this->store->get($collectionPath, $scope, $id);
 
@@ -393,8 +410,8 @@ class ApiFake
         }
 
         $regex = preg_replace(
-            '#\{id\}#',
-            '[0-9a-f\-]{36}',
+            ['#\{id\}#', '#\{resource\}#', '#\{operation\}#'],
+            ['[0-9a-f\-]{36}', '[a-zA-Z0-9_-]+', '[a-zA-Z0-9_-]+'],
             $key
         );
 
@@ -402,7 +419,26 @@ class ApiFake
             'operation' => $operation,
             'regex' => "#^{$regex}$#",
             'method' => strtoupper($method),
+            'pattern' => $key,
         ];
+    }
+
+    /**
+     * Register a nested resource operation for patterns like /collection/{resource}/operation.
+     *
+     * Example usage:
+     * $apiFake->registerNestedResourceOperation('users', 'profile', 'GET', 'show');
+     * This will handle GET /users/{userId}/profile
+     *
+     * @param  string  $collection  The base collection name
+     * @param  string  $operation  The operation name (custom operation name)
+     * @param  string  $method  The HTTP method for this operation
+     * @param  string  $crudOperation  The CRUD operation to map to ('list', 'show', 'create', 'update', 'delete')
+     */
+    public function registerNestedResourceOperation(string $collection, string $operation, string $method, string $crudOperation = 'list'): void
+    {
+        $pattern = "/{$collection}/{resource}/{$operation}";
+        $this->registerOperationMatcher($crudOperation, $pattern, $method);
     }
 
     /**
@@ -423,6 +459,59 @@ class ApiFake
             }
         }
 
+        return null;
+    }
+
+    /**
+     * Extract the resource ID from a nested resource path.
+     *
+     * @param  string  $path  The path to extract the resource ID from.
+     * @return ?string The resource ID or null if not found.
+     */
+    protected function extractResourceId(string $path): ?string
+    {
+        $parts = explode('/', trim($path, '/'));
+        
+        // For patterns like /collection/resource-id/operation
+        if (count($parts) >= 3) {
+            return $parts[1];
+        }
+        
+        return null;
+    }
+
+    /**
+     * Extract the operation name from a nested resource path.
+     *
+     * @param  string  $path  The path to extract the operation from.
+     * @return ?string The operation name or null if not found.
+     */
+    protected function extractOperationName(string $path): ?string
+    {
+        $parts = explode('/', trim($path, '/'));
+        
+        // For patterns like /collection/resource-id/operation
+        if (count($parts) >= 3) {
+            return $parts[2];
+        }
+        
+        return null;
+    }
+
+    /**
+     * Extract the collection name from a path.
+     *
+     * @param  string  $path  The path to extract the collection from.
+     * @return ?string The collection name or null if not found.
+     */
+    protected function extractCollectionName(string $path): ?string
+    {
+        $parts = explode('/', trim($path, '/'));
+        
+        if (count($parts) >= 1) {
+            return $parts[0];
+        }
+        
         return null;
     }
 

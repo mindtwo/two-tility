@@ -37,6 +37,38 @@ paths:
             email: jane@example.com
             role: editor
 
+  /users/{resource}/profile:
+    faker:
+      user_id: uuid
+      bio: sentence
+      avatar_url: imageUrl
+      website: url
+      location: city
+    show:
+      path: /users/{resource}/profile
+      authRequired: true
+      method: GET
+      responses:
+        '200':
+          example:
+            user_id: 1
+            bio: Full-stack developer passionate about clean code
+            avatar_url: https://via.placeholder.com/150
+            website: https://johndoe.dev
+            location: San Francisco
+    update:
+      path: /users/{resource}/profile
+      authRequired: true
+      method: PUT
+      responses:
+        '200':
+          example:
+            user_id: 1
+            bio: Updated bio for the user
+            avatar_url: https://via.placeholder.com/150
+            website: https://johndoe.dev
+            location: New York
+
   /products:
     faker:
       id: uuid
