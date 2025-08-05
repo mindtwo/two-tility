@@ -13,18 +13,23 @@ class FakeArrayStore
      */
     protected array $store = [];
 
+    private bool $isPersisted = false;
+
     public function __construct(
 
     ) {
         // Initialize the store if needed
         $this->store = [];
 
-        $this->loadFromFile(storage_path('api-fake.store'));
+        if ($this->isPersisted) {
 
-        // Register a shutdown function to save the store
-        register_shutdown_function(function () {
-            $this->saveToFile(storage_path('api-fake.store'));
-        });
+            $this->loadFromFile(storage_path('api-fake.store'));
+
+            // Register a shutdown function to save the store
+            register_shutdown_function(function () {
+                $this->saveToFile(storage_path('api-fake.store'));
+            });
+        }
     }
 
     /**

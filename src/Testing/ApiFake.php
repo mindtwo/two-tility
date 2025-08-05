@@ -7,7 +7,11 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use mindtwo\TwoTility\Helper\Hookable;
+use mindtwo\TwoTility\Testing\Api\ApiResponse;
 use mindtwo\TwoTility\Testing\Api\DefinitionFaker;
+use mindtwo\TwoTility\Testing\Api\RouteMatch;
+use mindtwo\TwoTility\Testing\Api\RouteOperation;
+use mindtwo\TwoTility\Testing\Api\RouteResolver;
 use mindtwo\TwoTility\Testing\Api\Stores\FakeArrayStore;
 use mindtwo\TwoTility\Testing\Contracts\SpecParserInterface;
 
@@ -18,21 +22,10 @@ class ApiFake
 
     protected FakeArrayStore $store;
 
+    protected RouteResolver $routeResolver;
+
     /** @var array<string, array<string, bool>> */
     protected array $authRequired = [];
-
-    /**
-     * The route patterns for dynamic path matching.
-     *
-     * This is used to match incoming requests to the defined API paths.
-     * The keys are regex patterns, and the values are the original paths.
-     *
-     * @var array<string, string>
-     */
-    protected array $routePatterns = []; // [regex => originalPath]
-
-    /** @var array<string, array{operation: string, regex: string, method: string}> */
-    protected array $operationMatchers = [];
 
     /**
      * The path definitions for the fake API.
@@ -89,6 +82,7 @@ class ApiFake
     {
         $this->baseUrl = rtrim($baseUrl, '/');
         $this->store = app(FakeArrayStore::class);
+        $this->routeResolver = new RouteResolver;
     }
 
     /**
@@ -101,7 +95,7 @@ class ApiFake
                 $path = parse_url($request->url(), PHP_URL_PATH);
                 $method = strtoupper($request->method());
 
-                $operation = $this->resolveOperationFromPath($path, $method);
+                $operation = $this->routeResolver->resolveOperationFromPath($path, $method);
 
                 // If no operation is matched, return a 404 response
                 if (! $operation) {
@@ -127,23 +121,42 @@ class ApiFake
      */
     protected function serveOperation(string $path, string $method, string $operation, Request $request): PromiseInterface
     {
+        // Get the route match to pass to handlers
+        $routeMatch = $this->routeResolver->matchRoute($path, $method);
+
+        // If no route match found, create a basic one for backward compatibility
+        if (! $routeMatch) {
+            // Create a basic RouteOperation for the operation
+            $routeOperation = new RouteOperation(
+                $operation,
+                $path,
+                '#^'.preg_quote($path, '#').'$#',
+                strtoupper($method)
+            );
+            $routeMatch = new RouteMatch($routeOperation, $path, $method);
+        }
+
         // For nested operations like /collection/{resource}/operation, try custom handler first
-        $operationName = $this->extractOperationName($path);
-        $collectionName = $this->extractCollectionName($path);
-        
+        $operationName = $this->routeResolver->extractOperationName($path);
+        $collectionName = $this->routeResolver->extractCollectionName($path);
+
         if ($operationName && $collectionName) {
             // Try method like getCollectionResourceOperation
-            $nestedHandlerMethod = strtolower($method) . ucfirst($collectionName) . 'Resource' . ucfirst($operationName);
-            
+            $nestedHandlerMethod = strtolower($method).ucfirst($collectionName).'Resource'.ucfirst($operationName);
+
             if (method_exists($this, $nestedHandlerMethod)) {
-                return $this->{$nestedHandlerMethod}($path, $request, $method);
+                $result = $this->{$nestedHandlerMethod}($path, $request, $method);
+
+                return $this->processHandlerResult($result, $path, $method, $operation);
             }
-            
+
             // Try method like handleCustomOperation
-            $customHandlerMethod = 'handle' . ucfirst($operationName);
-            
+            $customHandlerMethod = 'handle'.str_replace(['-', '_'], '', ucwords($operationName, '-_'));
+
             if (method_exists($this, $customHandlerMethod)) {
-                return $this->{$customHandlerMethod}($path, $request, $method);
+                $result = $this->{$customHandlerMethod}($path, $request, $method);
+
+                return $this->processHandlerResult($result, $path, $method, $operation);
             }
         }
 
@@ -151,46 +164,103 @@ class ApiFake
         $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operation);
 
         if (method_exists($this, $handlerMethod)) {
-            return $this->{$handlerMethod}($path, $request, $method);
+            $result = $this->{$handlerMethod}($path, $request, $method);
+
+            return $this->processHandlerResult($result, $path, $method, $operation);
         }
 
         $result = match ($operation) {
-            'list' => $this->handleList($path, $request, $method),
-            'show' => $this->handleShow($path, $request, $method),
-            'create' => $this->handleCreate($path, $request, $method),
-            'update' => $this->handleUpdate($path, $request, $method),
-            'delete' => $this->handleDelete($path, $request, $method),
-            default => Http::response(['error' => 'Unsupported method'], 405),
+            'list' => $this->handleList($routeMatch, $request),
+            'show' => $this->handleShow($routeMatch, $request),
+            'create' => $this->handleCreate($routeMatch, $request),
+            'update' => $this->handleUpdate($routeMatch, $request),
+            'delete' => $this->handleDelete($routeMatch, $request),
+            default => ApiResponse::withStatus(['error' => 'Unsupported method'], 405),
         };
 
+        return $this->processHandlerResult($result, $path, $method, $operation);
+    }
+
+    /**
+     * Process the result from a handler and return a PromiseInterface.
+     */
+    protected function processHandlerResult(mixed $result, string $path, string $method, string $operation): PromiseInterface
+    {
+        // Handle ApiResponse objects
+        if ($result instanceof ApiResponse) {
+            $formatted = $this->formatResponse($result->getData(), $path, $method, $operation);
+
+            return Http::response($formatted, $result->getStatus(), $result->getHeaders());
+        }
+
+        // Handle PromiseInterface objects (already formatted responses)
+        if ($result instanceof PromiseInterface) {
+            return $result;
+        }
+
+        // Handle legacy mixed responses (backward compatibility)
         $formatted = $this->formatResponse($result, $path, $method, $operation);
 
-        return Http::response($formatted, 200);
+        // Try to infer status code from response data
+        $statusCode = $this->inferStatusCode($result, $operation);
 
+        return Http::response($formatted, $statusCode);
+    }
+
+    /**
+     * Infer the appropriate status code from response data for backward compatibility.
+     */
+    protected function inferStatusCode(mixed $result, string $operation): int
+    {
+        // If result is null (common for delete operations), return 204 No Content
+        if ($result === null) {
+            return 204;
+        }
+
+        // If result is an array and contains error information, return appropriate error status
+        if (is_array($result)) {
+            if (isset($result['error'])) {
+                return match ($result['error']) {
+                    'Not found' => 404,
+                    'Unauthorized' => 401,
+                    'Forbidden' => 403,
+                    'Bad request' => 400,
+                    'Unprocessable entity' => 422,
+                    default => 400, // Default to bad request for unknown errors
+                };
+            }
+        }
+
+        // For create operations, return 201 Created
+        if ($operation === 'create') {
+            return 201;
+        }
+
+        // Default to 200 OK for successful operations
+        return 200;
     }
 
     /**
      * Handle POST requests to create a new item in the store.
      *
-     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  RouteMatch  $routeMatch  The route match containing path, method, and parameters.
      * @param  Request  $request  The request object containing the data to create.
-     * @param  string  $method  The HTTP method of the request (e.g., 'POST').
      */
-    protected function handleCreate(string $path, Request $request, string $method): mixed
+    protected function handleCreate(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = $this->generateId($path, $request);
+        $id = $this->generateId($routeMatch->getPath(), $request);
         $scope = $this->resolveScopeKey($request);
 
         // If the scope is a string, convert it to a closure that returns the scope
         $item = array_merge($request->data(), ['id' => $id]);
 
         // Run hooks for creating the item
-        $this->runHooks('creating', $item, $path, $request);
+        $this->runHooks('creating', $item, $routeMatch->getPath(), $request);
 
-        $this->store->add($path, $scope, $id, $item);
+        $this->store->add($routeMatch->getPath(), $scope, $id, $item);
 
         // Run hooks for created item
-        $this->runHooks('created', $item, $path, $request);
+        $this->runHooks('created', $item, $routeMatch->getPath(), $request);
 
         return $item;
     }
@@ -198,22 +268,21 @@ class ApiFake
     /**
      * Handle GET requests to retrieve a collection from the store.
      *
-     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  RouteMatch  $routeMatch  The route match containing path, method, and parameters.
      * @param  Request  $request  The request object.
-     * @param  string  $method  The HTTP method of the request (e.g, 'GET').
      * @return mixed The response data.
      */
-    protected function handleList(string $path, Request $request, string $method): mixed
+    protected function handleList(RouteMatch $routeMatch, Request $request): mixed
     {
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (! $this->store->has($path, $scope)) {
+        if (! $this->store->has($routeMatch->getPath(), $scope)) {
             return [];
         }
 
         // Get the list of items in the collection
-        $list = array_values($this->store->get($path, $scope));
+        $list = array_values($this->store->get($routeMatch->getPath(), $scope));
 
         return $list;
     }
@@ -221,15 +290,14 @@ class ApiFake
     /**
      * Handle GET requests to retrieve an item from the store.
      *
-     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  RouteMatch  $routeMatch  The route match containing path, method, and parameters.
      * @param  Request  $request  The request object.
-     * @param  string  $method  The HTTP method of the request (e.g, 'GET').
      * @return mixed The response data.
      */
-    protected function handleShow(string $path, Request $request, string $method): mixed
+    protected function handleShow(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = basename($path);
-        $collectionPath = dirname($path);
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
+        $collectionPath = $routeMatch->getCollectionPath();
 
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
@@ -240,7 +308,7 @@ class ApiFake
         // Get the item from the store
         $item = $this->store->get($collectionPath, $scope, $id);
 
-        $this->runHooks('showing', $item, $path, $request);
+        $this->runHooks('showing', $item, $routeMatch->getPath(), $request);
 
         return $item;
     }
@@ -248,14 +316,13 @@ class ApiFake
     /**
      * Handle PUT/PATCH requests to update an item in the store.
      *
-     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  RouteMatch  $routeMatch  The route match containing path, method, and parameters.
      * @param  Request  $request  The request object containing the data to update.
-     * @param  string  $method  The HTTP method of the request (e.g., 'PUT', 'PATCH').
      */
-    protected function handleUpdate(string $path, Request $request, string $method): mixed
+    protected function handleUpdate(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = basename($path);
-        $collectionPath = dirname($path);
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
+        $collectionPath = $routeMatch->getCollectionPath();
 
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
@@ -265,14 +332,14 @@ class ApiFake
             $item = $this->store->get($collectionPath, $scope, $id);
 
             // Run hooks for updating the item
-            $this->runHooks('updating', $item, $path, $request);
+            $this->runHooks('updating', $item, $routeMatch->getPath(), $request);
 
             // Update the item with the new data
             $item = array_merge($item, $request->data());
             $this->store->put($collectionPath, $scope, $id, $item);
 
             // Run hooks for updated item
-            $this->runHooks('updated', $item, $path, $request);
+            $this->runHooks('updated', $item, $routeMatch->getPath(), $request);
 
             return $item;
         } else {
@@ -283,14 +350,13 @@ class ApiFake
     /**
      * Handle DELETE requests to remove an item from the store.
      *
-     * @param  string  $path  The path of the request, which includes the collection and item ID.
+     * @param  RouteMatch  $routeMatch  The route match containing path, method, and parameters.
      * @param  Request  $request  The request object.
-     * @param  string  $method  The HTTP method of the request (e.g. 'DELETE').
      */
-    protected function handleDelete(string $path, Request $request, string $method): mixed
+    protected function handleDelete(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = basename($path);
-        $collectionPath = dirname($path);
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
+        $collectionPath = $routeMatch->getCollectionPath();
         $scope = $this->resolveScopeKey($request);
 
         if ($this->store->has($collectionPath, $scope, $id)) {
@@ -395,124 +461,22 @@ class ApiFake
     }
 
     /**
-     * Register a custom operation matcher for the fake API.
-     *
-     * This allows you to define custom regex patterns for matching operations.
-     *
-     * @param  string  $operation  The operation name (e.g., 'create', 'update').
-     * @param  string  $key  The regex pattern to match the operation.
-     * @param  string  $method  The HTTP method for this operation (e.g., 'POST', 'GET').
+     * Get the route resolver instance.
      */
-    public function registerOperationMatcher(string $operation, string $key, string $method): void
+    public function getRouteResolver(): RouteResolver
     {
-        if (! in_array($operation, ['list', 'show', 'create', 'update', 'delete'])) {
-            throw new \InvalidArgumentException("Invalid operation: {$operation}");
-        }
-
-        $regex = preg_replace(
-            ['#\{id\}#', '#\{resource\}#', '#\{operation\}#'],
-            ['[0-9a-f\-]{36}', '[a-zA-Z0-9_-]+', '[a-zA-Z0-9_-]+'],
-            $key
-        );
-
-        $this->operationMatchers[] = [
-            'operation' => $operation,
-            'regex' => "#^{$regex}$#",
-            'method' => strtoupper($method),
-            'pattern' => $key,
-        ];
+        return $this->routeResolver;
     }
 
     /**
-     * Register a nested resource operation for patterns like /collection/{resource}/operation.
+     * Match a route and return detailed information about the match.
      *
-     * Example usage:
-     * $apiFake->registerNestedResourceOperation('users', 'profile', 'GET', 'show');
-     * This will handle GET /users/{userId}/profile
-     *
-     * @param  string  $collection  The base collection name
-     * @param  string  $operation  The operation name (custom operation name)
-     * @param  string  $method  The HTTP method for this operation
-     * @param  string  $crudOperation  The CRUD operation to map to ('list', 'show', 'create', 'update', 'delete')
+     * @param  string  $path  The path to match
+     * @param  string  $method  The HTTP method
      */
-    public function registerNestedResourceOperation(string $collection, string $operation, string $method, string $crudOperation = 'list'): void
+    public function matchRoute(string $path, string $method): ?\mindtwo\TwoTility\Testing\Api\RouteMatch
     {
-        $pattern = "/{$collection}/{resource}/{$operation}";
-        $this->registerOperationMatcher($crudOperation, $pattern, $method);
-    }
-
-    /**
-     * Resolve the operation from the path and method.
-     *
-     * This method checks the registered operation matchers to find a matching operation
-     * for the given path and method.
-     *
-     * @param  string  $path  The path of the request.
-     * @param  string  $method  The HTTP method of the request (e.g., 'GET', 'POST').
-     * @return ?string The matched operation name or null if no match is found.
-     */
-    protected function resolveOperationFromPath(string $path, string $method): ?string
-    {
-        foreach ($this->operationMatchers as $match) {
-            if (preg_match($match['regex'], $path) && $match['method'] === strtoupper($method)) {
-                return $match['operation'];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract the resource ID from a nested resource path.
-     *
-     * @param  string  $path  The path to extract the resource ID from.
-     * @return ?string The resource ID or null if not found.
-     */
-    protected function extractResourceId(string $path): ?string
-    {
-        $parts = explode('/', trim($path, '/'));
-        
-        // For patterns like /collection/resource-id/operation
-        if (count($parts) >= 3) {
-            return $parts[1];
-        }
-        
-        return null;
-    }
-
-    /**
-     * Extract the operation name from a nested resource path.
-     *
-     * @param  string  $path  The path to extract the operation from.
-     * @return ?string The operation name or null if not found.
-     */
-    protected function extractOperationName(string $path): ?string
-    {
-        $parts = explode('/', trim($path, '/'));
-        
-        // For patterns like /collection/resource-id/operation
-        if (count($parts) >= 3) {
-            return $parts[2];
-        }
-        
-        return null;
-    }
-
-    /**
-     * Extract the collection name from a path.
-     *
-     * @param  string  $path  The path to extract the collection from.
-     * @return ?string The collection name or null if not found.
-     */
-    protected function extractCollectionName(string $path): ?string
-    {
-        $parts = explode('/', trim($path, '/'));
-        
-        if (count($parts) >= 1) {
-            return $parts[0];
-        }
-        
-        return null;
+        return $this->routeResolver->matchRoute($path, $method);
     }
 
     /**
@@ -651,10 +615,11 @@ class ApiFake
                 $method = strtoupper($operation['method']);
                 $operationPath = $operation['path'] ?? $path;
                 // Register the operation matcher for this path
-                $this->registerOperationMatcher(
+                $this->routeResolver->registerOperationMatcher(
                     $op,
                     $operationPath,
-                    $method
+                    $method,
+                    $operation['basePath'] ?? null
                 );
 
                 $this->registerAuthRequirement(

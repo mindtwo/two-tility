@@ -1,97 +1,130 @@
-paths:
-  /users:
+collections:
+  users:
+    basePath: /v1/users
     faker:
       id: uuid
       name: name
       email: safeEmail
       role: ['admin', 'editor', 'viewer']
-    list:
-      authRequired: true
-      method: GET
-      responses:
-        '200':
-          example:
-            - id: 1
-              name: John Doe
-              email: test@example.com
-              role: admin
-    show:
-      path: /users/{id}
-      authRequired: true
-      method: GET
-      responses:
-        '200':
-          example:
-            id: 1
-            name: John Doe
-            email: john@example.com
-            role: admin
-    create:
-      authRequired: true
-      method: POST
-      responses:
-        '200':
-          example:
-            id: 2
-            name: Jane Smith
-            email: jane@example.com
-            role: editor
 
-  /users/{resource}/profile:
-    faker:
-      user_id: uuid
-      bio: sentence
-      avatar_url: imageUrl
-      website: url
-      location: city
-    show:
-      path: /users/{resource}/profile
-      authRequired: true
-      method: GET
-      responses:
-        '200':
-          example:
-            user_id: 1
-            bio: Full-stack developer passionate about clean code
-            avatar_url: https://via.placeholder.com/150
-            website: https://johndoe.dev
-            location: San Francisco
-    update:
-      path: /users/{resource}/profile
-      authRequired: true
-      method: PUT
-      responses:
-        '200':
-          example:
-            user_id: 1
-            bio: Updated bio for the user
-            avatar_url: https://via.placeholder.com/150
-            website: https://johndoe.dev
-            location: New York
+    operations:
+      list:
+        authRequired: true
+        method: GET
+      create:
+        authRequired: true
+        method: POST
 
-  /products:
-    faker:
-      id: uuid
-      title: word
-      price: randomFloat(2, 10, 100)
-      available: boolean
-    list:
-      authRequired: false
-      method: GET
-      responses:
-        '200':
-          example:
-            - id: 101
-              title: Sample Product
-              price: 49.99
-              available: true
-    create:
-      authRequired: true
-      method: POST
-      responses:
-        '200':
-          example:
-            id: 102
-            title: New Product
-            price: 29.99
-            available: false
+    routes:
+      # Static route example - no parameters
+      /orders:
+        faker:
+          id: uuid
+          user_id: uuid
+          total: randomFloat(2, 10, 500)
+          status: ['pending', 'completed', 'cancelled']
+        operations:
+          list:
+            authRequired: true
+            method: GET
+          create:
+            authRequired: true
+            method: POST
+      # Static route with hyphens
+      /active-carts:
+        faker:
+          id: uuid
+          user_id: uuid
+          items: numberBetween(1, 5)
+          total: randomFloat(2, 20, 200)
+          expires_at: dateTime
+        operations:
+          list:
+            authRequired: true
+            method: GET
+          create:
+            authRequired: true
+            method: POST
+      # Dynamic route with parameter
+      /{id}:
+        operations:
+          show:
+            authRequired: true
+            method: GET
+          update:
+            authRequired: true
+            method: PUT
+          delete:
+            authRequired: true
+            method: DELETE
+      # Mixed route with parameter and static segment
+      /{id}/profile:
+        operations:
+          show:
+            authRequired: true
+            method: GET
+            responses:
+              '200':
+                example:
+                  user_id: 1
+                  bio: Full-stack developer passionate about clean code
+                  avatar_url: https://via.placeholder.com/150
+                  website: https://johndoe.dev
+                  location: San Francisco
+          update:
+            authRequired: true
+            method: PUT
+      # Another static route under dynamic parameter
+      /{id}/orders:
+        faker:
+          id: uuid
+          user_id: uuid
+          product_name: word
+          quantity: numberBetween(1, 10)
+          price: randomFloat(2, 5, 100)
+        operations:
+          list:
+            authRequired: true
+            method: GET
+          create:
+            authRequired: true
+            method: POST
+      # Mixed route with hyphens
+      /{id}/shopping-history:
+        faker:
+          id: uuid
+          user_id: uuid
+          purchase_date: dateTime
+          total_spent: randomFloat(2, 10, 1000)
+          items_count: numberBetween(1, 20)
+        operations:
+          list:
+            authRequired: true
+            method: GET
+
+  # /products:
+  #   faker:
+  #     id: uuid
+  #     title: word
+  #     price: randomFloat(2, 10, 100)
+  #     available: boolean
+  #   list:
+  #     authRequired: false
+  #     method: GET
+  #     responses:
+  #       '200':
+  #         example:
+  #           - id: 101
+  #             title: Sample Product
+  #             price: 49.99
+  #             available: true
+  #   create:
+  #     authRequired: true
+  #     method: POST
+  #     responses:
+  #       '200':
+  #         example:
+  #           id: 102
+  #           title: New Product
+  #           price: 29.99
+  #           available: false
