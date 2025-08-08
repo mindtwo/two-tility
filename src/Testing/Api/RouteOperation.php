@@ -12,6 +12,7 @@ class RouteOperation
         public readonly string $pattern,
         public readonly string $regex,
         public readonly string $method,
+        public readonly string $collectionName,
         public readonly array $parameters = [],
         public readonly ?string $basePath = null
     ) {}
@@ -32,7 +33,7 @@ class RouteOperation
     public function extractParameters(string $path): array
     {
         $parameters = [];
-        
+
         if (preg_match($this->regex, $path, $matches)) {
             // Extract named parameters from the pattern
             if (preg_match_all('/\{(\w+)\}/', $this->pattern, $paramMatches)) {
@@ -44,14 +45,14 @@ class RouteOperation
                 }
             }
         }
-        
+
         return $parameters;
     }
 
     /**
      * Get the operation type (list, show, create, update, delete).
      */
-    public function getOperation(): string
+    public function operation(): string
     {
         return $this->operation;
     }
@@ -59,7 +60,7 @@ class RouteOperation
     /**
      * Get the HTTP method for this operation.
      */
-    public function getMethod(): string
+    public function method(): string
     {
         return $this->method;
     }
@@ -67,7 +68,7 @@ class RouteOperation
     /**
      * Get the original pattern used to create this operation.
      */
-    public function getPattern(): string
+    public function pattern(): string
     {
         return $this->pattern;
     }
@@ -75,7 +76,7 @@ class RouteOperation
     /**
      * Get the compiled regex pattern.
      */
-    public function getRegex(): string
+    public function regex(): string
     {
         return $this->regex;
     }
@@ -83,9 +84,14 @@ class RouteOperation
     /**
      * Get the base path for this operation.
      */
-    public function getBasePath(): ?string
+    public function basePath(): ?string
     {
         return $this->basePath;
+    }
+
+    public function collection(): string
+    {
+        return $this->collectionName;
     }
 
     /**

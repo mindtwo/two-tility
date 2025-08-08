@@ -11,22 +11,23 @@ class RouteMatch
         public readonly RouteOperation $operation,
         public readonly string $path,
         public readonly string $method,
+        public readonly string $collectionName,
         public readonly array $parameters = [],
-        public readonly ?string $basePath = null
+        public readonly ?string $basePath = null,
     ) {}
 
     /**
      * Get the matched operation type.
      */
-    public function getOperation(): string
+    public function operation(): string
     {
-        return $this->operation->getOperation();
+        return $this->operation->operation();
     }
 
     /**
      * Get the HTTP method.
      */
-    public function getMethod(): string
+    public function method(): string
     {
         return $this->method;
     }
@@ -34,7 +35,7 @@ class RouteMatch
     /**
      * Get the full matched path.
      */
-    public function getPath(): string
+    public function path(): string
     {
         return $this->path;
     }
@@ -44,7 +45,7 @@ class RouteMatch
      *
      * @return array<string, string>
      */
-    public function getParameters(): array
+    public function parameters(): array
     {
         return $this->parameters;
     }
@@ -52,7 +53,7 @@ class RouteMatch
     /**
      * Get a specific parameter value.
      */
-    public function getParameter(string $name, ?string $default = null): ?string
+    public function parameter(string $name, ?string $default = null): ?string
     {
         return $this->parameters[$name] ?? $default;
     }
@@ -60,7 +61,7 @@ class RouteMatch
     /**
      * Check if a parameter exists.
      */
-    public function hasParameter(string $name): bool
+    public function has(string $name): bool
     {
         return isset($this->parameters[$name]);
     }
@@ -70,73 +71,21 @@ class RouteMatch
      */
     public function getResourceId(): ?string
     {
-        return $this->getParameter('resource') ?? $this->getParameter('id');
+        return $this->parameter('resource') ?? $this->parameter('id');
     }
 
     /**
      * Get the collection name from the path.
      */
-    public function getCollectionName(): ?string
+    public function collection(): string
     {
-        $parts = explode('/', trim($this->path, '/'));
-        
-        if (count($parts) >= 1) {
-            return $parts[0];
-        }
-        
-        return null;
-    }
-
-    /**
-     * Get the operation name from nested resource paths.
-     */
-    public function getOperationName(): ?string
-    {
-        $parts = explode('/', trim($this->path, '/'));
-        
-        // For patterns like /collection/resource-id/operation
-        if (count($parts) >= 3) {
-            return $parts[2];
-        }
-        
-        return null;
-    }
-
-    /**
-     * Check if this is a nested resource operation.
-     */
-    public function isNestedResource(): bool
-    {
-        return count(explode('/', trim($this->path, '/'))) >= 3;
-    }
-
-    /**
-     * Get the collection path for store operations.
-     * For nested routes like /users/{id}/profile, returns /users
-     * For simple routes like /users/{id}, returns /users
-     * If basePath is provided (e.g. /v1/users), returns the full base path
-     */
-    public function getCollectionPath(): string
-    {
-        // If we have basePath from the API spec, use it
-        if ($this->basePath !== null) {
-            return $this->basePath;
-        }
-        
-        // Fallback to extracting from path (legacy behavior)
-        $parts = explode('/', trim($this->path, '/'));
-        
-        if (count($parts) >= 1) {
-            return '/' . $parts[0];
-        }
-        
-        return $this->path;
+        return $this->collectionName;
     }
 
     /**
      * Get the underlying RouteOperation.
      */
-    public function getRouteOperation(): RouteOperation
+    public function routeOperation(): RouteOperation
     {
         return $this->operation;
     }

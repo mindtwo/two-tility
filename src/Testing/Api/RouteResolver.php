@@ -13,9 +13,10 @@ class RouteResolver
      * @param  string  $operation  The operation name (e.g., 'create', 'update').
      * @param  string  $pattern  The pattern to match the operation.
      * @param  string  $method  The HTTP method for this operation (e.g., 'POST', 'GET').
+     * @param  string  $collection  The collection name this operation belongs to.
      * @param  string|null  $basePath  The base path for this operation (e.g., '/v1/users').
      */
-    public function registerOperationMatcher(string $operation, string $pattern, string $method, ?string $basePath = null): void
+    public function registerOperationMatcher(string $operation, string $pattern, string $method, string $collection, ?string $basePath = null): void
     {
         if (! in_array($operation, ['list', 'show', 'create', 'update', 'delete'])) {
             throw new \InvalidArgumentException("Invalid operation: {$operation}");
@@ -38,6 +39,7 @@ class RouteResolver
             pattern: $pattern,
             regex: "#^{$regex}$#",
             method: strtoupper($method),
+            collectionName: $collection,
             basePath: $basePath ?? $this->extractBasePathFromPattern($pattern)
         );
     }
@@ -54,10 +56,12 @@ class RouteResolver
      * @param  string  $method  The HTTP method for this operation
      * @param  string  $crudOperation  The CRUD operation to map to ('list', 'show', 'create', 'update', 'delete')
      */
-    public function registerNestedResourceOperation(string $collection, string $operation, string $method, string $crudOperation = 'list'): void
+    public function registerNestedResourceOperation(string $collection, string $operation, string $method, ?string $collectionName = null, string $crudOperation = 'list'): void
     {
+        $collectionName = $collectionName ?? $collection;
+
         $pattern = "/{$collection}/{resource}/{$operation}";
-        $this->registerOperationMatcher($crudOperation, $pattern, $method);
+        $this->registerOperationMatcher($crudOperation, $pattern, $method, $collectionName);
     }
 
     /**
@@ -74,7 +78,7 @@ class RouteResolver
     {
         $match = $this->matchRoute($path, $method);
 
-        return $match?->getOperation();
+        return $match?->operation();
     }
 
     /**
@@ -94,8 +98,9 @@ class RouteResolver
                     operation: $operation,
                     path: $path,
                     method: strtoupper($method),
+                    collectionName: $operation->collection(),
                     parameters: $parameters,
-                    basePath: $operation->getBasePath()
+                    basePath: $operation->basePath()
                 );
             }
         }
@@ -193,12 +198,12 @@ class RouteResolver
     {
         // Remove parameters like {id}, {resource}, etc.
         $basePath = preg_replace('/\/\{[^}]+\}.*$/', '', $pattern);
-        
+
         // If no parameters were found, return the entire pattern
         if ($basePath === $pattern) {
             return $pattern;
         }
-        
+
         return $basePath;
     }
 }

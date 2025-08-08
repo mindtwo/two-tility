@@ -47,30 +47,32 @@ class YamlFakeApiParser implements SpecParserInterface
 
         foreach ($collections as $collectionName => $collection) {
             $basePath = $collection['basePath'] ?? "/{$collectionName}";
-            
+
             // Store faker definitions for the base collection
-            if (!empty($collection['faker'])) {
-                $this->fakerDefinitions[$basePath] = $collection['faker'];
+            if (! empty($collection['faker'])) {
+                $this->fakerDefinitions[$collectionName] = $collection['faker'];
             }
 
             // Process base operations (list, create, etc.)
-            if (!empty($collection['operations'])) {
+            if (! empty($collection['operations'])) {
                 $this->processOperations($basePath, $collection['operations'], $basePath, $basePath);
             }
 
             // Process nested routes
-            if (!empty($collection['routes'])) {
+            if (! empty($collection['routes'])) {
                 foreach ($collection['routes'] as $routePath => $route) {
-                    $fullPath = $basePath . $routePath;
-                    
+                    // Change the base path if specified
+                    $routeBasePath = $route['basePath'] ?? null;
+                    $fullPath = $routeBasePath ? "{$routeBasePath}{$routePath}" : "{$basePath}{$routePath}";
+
                     // Store faker definitions for the route if provided
-                    if (!empty($route['faker'])) {
+                    if (! empty($route['faker'])) {
                         $this->fakerDefinitions[$fullPath] = $route['faker'];
                     }
 
                     // Process operations for this route
-                    if (!empty($route['operations'])) {
-                        $this->processOperations($fullPath, $route['operations'], $fullPath, $basePath);
+                    if (! empty($route['operations'])) {
+                        $this->processOperations($fullPath, $route['operations'], $fullPath, $collectionName, $routeBasePath ?? $basePath);
                     }
                 }
             }
@@ -83,12 +85,13 @@ class YamlFakeApiParser implements SpecParserInterface
      * @param  string  $path  The path for the operations
      * @param  array<string, mixed>  $operations  The operations array
      * @param  string  $originalPath  The original path for storing in parsedPaths
+     * @param  string  $collection  The collection name for this path
      * @param  string|null  $basePath  The base path from the collection definition
      */
-    protected function processOperations(string $path, array $operations, string $originalPath, ?string $basePath = null): void
+    protected function processOperations(string $path, array $operations, string $originalPath, string $collection, ?string $basePath = null): void
     {
         foreach ($operations as $operation => $config) {
-            if (!in_array($operation, ['list', 'show', 'create', 'update', 'delete'])) {
+            if (! in_array($operation, ['list', 'show', 'create', 'update', 'delete'])) {
                 continue;
             }
 
@@ -96,21 +99,22 @@ class YamlFakeApiParser implements SpecParserInterface
             $authRequired = $config['authRequired'] ?? false;
 
             // Store in parsedPaths structure
-            if (!isset($this->parsedPaths[$originalPath])) {
+            if (! isset($this->parsedPaths[$originalPath])) {
                 $this->parsedPaths[$originalPath] = [];
             }
 
             $this->parsedPaths[$originalPath][$operation] = [
+                'collection' => $collection,
                 'method' => $method,
                 'authRequired' => $authRequired,
                 'path' => $path,
                 'basePath' => $basePath,
-                'responses' => $config['responses'] ?? []
+                'responses' => $config['responses'] ?? [],
             ];
 
             // Track supported methods
             $this->supportedMethods[$path][] = $method;
-            
+
             // Track auth requirements
             $this->authRequirements[$path][$method] = $authRequired;
         }

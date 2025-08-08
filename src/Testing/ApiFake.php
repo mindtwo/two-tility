@@ -10,7 +10,6 @@ use mindtwo\TwoTility\Helper\Hookable;
 use mindtwo\TwoTility\Testing\Api\ApiResponse;
 use mindtwo\TwoTility\Testing\Api\DefinitionFaker;
 use mindtwo\TwoTility\Testing\Api\RouteMatch;
-use mindtwo\TwoTility\Testing\Api\RouteOperation;
 use mindtwo\TwoTility\Testing\Api\RouteResolver;
 use mindtwo\TwoTility\Testing\Api\Stores\FakeArrayStore;
 use mindtwo\TwoTility\Testing\Contracts\SpecParserInterface;
@@ -35,7 +34,7 @@ class ApiFake
      *
      * @var array<string, array<string, mixed>>
      */
-    protected array $pathFakerDefinitions = [];
+    protected array $collectionFakerDefinitions = [];
 
     /**
      * The last response returned by the fake API.
@@ -95,10 +94,11 @@ class ApiFake
                 $path = parse_url($request->url(), PHP_URL_PATH);
                 $method = strtoupper($request->method());
 
-                $operation = $this->routeResolver->resolveOperationFromPath($path, $method);
+                // Get the route match to pass to handlers
+                $match = $this->routeResolver->matchRoute($path, $method);
 
                 // If no operation is matched, return a 404 response
-                if (! $operation) {
+                if (! $match) {
                     return Http::response(['error' => 'No route matched'], 404);
                 }
 
@@ -108,7 +108,7 @@ class ApiFake
                 }
 
                 // Match the method and handle the request accordingly
-                $this->lastResponse = $this->serveOperation($path, $method, $operation, $request);
+                $this->lastResponse = $this->serveOperation($path, $method, $match, $request);
 
                 return $this->lastResponse;
             }]);
@@ -119,26 +119,11 @@ class ApiFake
     /**
      * Serve the operation based on the path, method, and request.
      */
-    protected function serveOperation(string $path, string $method, string $operation, Request $request): PromiseInterface
+    protected function serveOperation(string $path, string $method, RouteMatch $match, Request $request): PromiseInterface
     {
-        // Get the route match to pass to handlers
-        $routeMatch = $this->routeResolver->matchRoute($path, $method);
-
-        // If no route match found, create a basic one for backward compatibility
-        if (! $routeMatch) {
-            // Create a basic RouteOperation for the operation
-            $routeOperation = new RouteOperation(
-                $operation,
-                $path,
-                '#^'.preg_quote($path, '#').'$#',
-                strtoupper($method)
-            );
-            $routeMatch = new RouteMatch($routeOperation, $path, $method);
-        }
-
         // For nested operations like /collection/{resource}/operation, try custom handler first
-        $operationName = $this->routeResolver->extractOperationName($path);
-        $collectionName = $this->routeResolver->extractCollectionName($path);
+        $operationName = $match->operation();
+        $collectionName = $match->collection();
 
         if ($operationName && $collectionName) {
             // Try method like getCollectionResourceOperation
@@ -147,38 +132,29 @@ class ApiFake
             if (method_exists($this, $nestedHandlerMethod)) {
                 $result = $this->{$nestedHandlerMethod}($path, $request, $method);
 
-                return $this->processHandlerResult($result, $path, $method, $operation);
-            }
-
-            // Try method like handleCustomOperation
-            $customHandlerMethod = 'handle'.str_replace(['-', '_'], '', ucwords($operationName, '-_'));
-
-            if (method_exists($this, $customHandlerMethod)) {
-                $result = $this->{$customHandlerMethod}($path, $request, $method);
-
-                return $this->processHandlerResult($result, $path, $method, $operation);
+                return $this->processHandlerResult($result, $path, $method, $operationName);
             }
         }
 
         // Get method handler name for standard operations
-        $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operation);
+        $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operationName);
 
         if (method_exists($this, $handlerMethod)) {
             $result = $this->{$handlerMethod}($path, $request, $method);
 
-            return $this->processHandlerResult($result, $path, $method, $operation);
+            return $this->processHandlerResult($result, $path, $method, $operationName);
         }
 
-        $result = match ($operation) {
-            'list' => $this->handleList($routeMatch, $request),
-            'show' => $this->handleShow($routeMatch, $request),
-            'create' => $this->handleCreate($routeMatch, $request),
-            'update' => $this->handleUpdate($routeMatch, $request),
-            'delete' => $this->handleDelete($routeMatch, $request),
+        $result = match ($operationName) {
+            'list' => $this->handleList($match, $request),
+            'show' => $this->handleShow($match, $request),
+            'create' => $this->handleCreate($match, $request),
+            'update' => $this->handleUpdate($match, $request),
+            'delete' => $this->handleDelete($match, $request),
             default => ApiResponse::withStatus(['error' => 'Unsupported method'], 405),
         };
 
-        return $this->processHandlerResult($result, $path, $method, $operation);
+        return $this->processHandlerResult($result, $path, $method, $operationName);
     }
 
     /**
@@ -248,19 +224,19 @@ class ApiFake
      */
     protected function handleCreate(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = $this->generateId($routeMatch->getPath(), $request);
+        $id = $this->generateId($routeMatch->path(), $request);
         $scope = $this->resolveScopeKey($request);
 
         // If the scope is a string, convert it to a closure that returns the scope
         $item = array_merge($request->data(), ['id' => $id]);
 
         // Run hooks for creating the item
-        $this->runHooks('creating', $item, $routeMatch->getPath(), $request);
+        $this->runHooks('creating', $item, $routeMatch->path(), $request);
 
-        $this->store->add($routeMatch->getPath(), $scope, $id, $item);
+        $this->store->add($routeMatch->collection(), $scope, $id, $item);
 
         // Run hooks for created item
-        $this->runHooks('created', $item, $routeMatch->getPath(), $request);
+        $this->runHooks('created', $item, $routeMatch->path(), $request);
 
         return $item;
     }
@@ -277,12 +253,12 @@ class ApiFake
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (! $this->store->has($routeMatch->getPath(), $scope)) {
+        if (! $this->store->has($routeMatch->path(), $scope)) {
             return [];
         }
 
         // Get the list of items in the collection
-        $list = array_values($this->store->get($routeMatch->getPath(), $scope));
+        $list = array_values($this->store->get($routeMatch->path(), $scope));
 
         return $list;
     }
@@ -296,19 +272,19 @@ class ApiFake
      */
     protected function handleShow(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
-        $collectionPath = $routeMatch->getCollectionPath();
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->path());
+        $collection = $routeMatch->collection();
 
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (! $this->store->has($collectionPath, $scope, $id)) {
+        if (! $this->store->has($collection, $scope, $id)) {
             return ['error' => 'Not found'];
         }
         // Get the item from the store
-        $item = $this->store->get($collectionPath, $scope, $id);
+        $item = $this->store->get($collection, $scope, $id);
 
-        $this->runHooks('showing', $item, $routeMatch->getPath(), $request);
+        $this->runHooks('showing', $item, $routeMatch->path(), $request);
 
         return $item;
     }
@@ -321,25 +297,25 @@ class ApiFake
      */
     protected function handleUpdate(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
-        $collectionPath = $routeMatch->getCollectionPath();
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->path());
+        $collection = $routeMatch->collection();
 
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if ($this->store->has($collectionPath, $scope, $id)) {
+        if ($this->store->has($collection, $scope, $id)) {
             // after
-            $item = $this->store->get($collectionPath, $scope, $id);
+            $item = $this->store->get($collection, $scope, $id);
 
             // Run hooks for updating the item
-            $this->runHooks('updating', $item, $routeMatch->getPath(), $request);
+            $this->runHooks('updating', $item, $routeMatch->path(), $request);
 
             // Update the item with the new data
             $item = array_merge($item, $request->data());
-            $this->store->put($collectionPath, $scope, $id, $item);
+            $this->store->put($collection, $scope, $id, $item);
 
             // Run hooks for updated item
-            $this->runHooks('updated', $item, $routeMatch->getPath(), $request);
+            $this->runHooks('updated', $item, $routeMatch->path(), $request);
 
             return $item;
         } else {
@@ -355,20 +331,20 @@ class ApiFake
      */
     protected function handleDelete(RouteMatch $routeMatch, Request $request): mixed
     {
-        $id = $routeMatch->getResourceId() ?? basename($routeMatch->getPath());
-        $collectionPath = $routeMatch->getCollectionPath();
+        $id = $routeMatch->getResourceId() ?? basename($routeMatch->path());
+        $collection = $routeMatch->collection();
         $scope = $this->resolveScopeKey($request);
 
-        if ($this->store->has($collectionPath, $scope, $id)) {
+        if ($this->store->has($collection, $scope, $id)) {
             // Run hooks for deleting the item
-            $this->runHooks('deleting', $id, $collectionPath, $request);
+            $this->runHooks('deleting', $id, $collection, $request);
 
-            $this->store->remove($collectionPath, $scope, $id);
+            $this->store->remove($collection, $scope, $id);
 
             // Run hooks for deleted item
-            $this->runHooks('deleted', $id, $collectionPath, $request);
+            $this->runHooks('deleted', $id, $collection, $request);
 
-            return null;
+            return true;
         } else {
             return ['error' => 'Not found'];
         }
@@ -403,7 +379,7 @@ class ApiFake
     {
         $faker = new DefinitionFaker;
 
-        $definition = $definition ?? $this->pathFakerDefinitions[$path] ?? [];
+        $definition = $definition ?? $this->collectionFakerDefinitions[$path] ?? [];
         if (empty($definition)) {
             throw new \InvalidArgumentException("No definition found for path: {$path}");
         }
@@ -457,7 +433,7 @@ class ApiFake
      */
     public function addPathDefinition(string $path, array $definition): void
     {
-        $this->pathFakerDefinitions[$path] = $definition;
+        $this->collectionFakerDefinitions[$path] = $definition;
     }
 
     /**
@@ -589,7 +565,7 @@ class ApiFake
     }
 
     /**
-     * @param  array<string, array{faker?: array<string, mixed>,list?: array{method: string, authRequired: bool, responses: array<string, mixed>},show?: array{method: string, path?: string, authRequired: bool, responses: array<string, mixed>},create?: array{method: string, authRequired: bool, responses: array<string, mixed>},update?: array{method: string, authRequired: bool, responses: array<string, mixed>}, delete?: array{method: string, authRequired: bool, responses: array<string, mixed>}}>  $parsedPaths
+     * @param  array<string, array{faker?: array<string, mixed>,list?: array{method: string, collection: string, authRequired: bool, responses: array<string, mixed>},show?: array{method: string, collection: string, path?: string, authRequired: bool, responses: array<string, mixed>},create?: array{method: string, collection: string, authRequired: bool, responses: array<string, mixed>},update?: array{method: string, collection: string, authRequired: bool, responses: array<string, mixed>}, delete?: array{method: string, collection: string, authRequired: bool, responses: array<string, mixed>}}>  $parsedPaths
      * @param  array<string, array<string, mixed>>  $fakerDefinitions
      * @param  array<string, array<string, bool>>  $authRequirements
      */
@@ -599,7 +575,7 @@ class ApiFake
         array $authRequirements = [],
     ): self {
         // Initialize the store with parsed paths
-        $this->pathFakerDefinitions = $fakerDefinitions;
+        $this->collectionFakerDefinitions = $fakerDefinitions;
         $this->authRequired = $authRequirements;
 
         // Load fake responses from path data
@@ -614,11 +590,14 @@ class ApiFake
                 // Get method
                 $method = strtoupper($operation['method']);
                 $operationPath = $operation['path'] ?? $path;
+                $collectionName = $operation['collection'];
+
                 // Register the operation matcher for this path
                 $this->routeResolver->registerOperationMatcher(
                     $op,
                     $operationPath,
                     $method,
+                    $collectionName,
                     $operation['basePath'] ?? null
                 );
 
