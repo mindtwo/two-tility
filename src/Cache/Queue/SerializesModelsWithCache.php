@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Queue\SerializesModels;
 use mindtwo\TwoTility\Cache\Contracts\HasSerializeableCacheData;
 
+// @phpstan-ignore-next-line
 trait SerializesModelsWithCache
 {
     use SerializesModels {

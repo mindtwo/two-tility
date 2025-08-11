@@ -5,6 +5,7 @@ namespace mindtwo\TwoTility\Cache\Models;
 use mindtwo\TwoTility\Cache\Data\DataCache;
 use mindtwo\TwoTility\Cache\Queue\SerializedCache;
 
+// @phpstan-ignore-next-line
 trait HasCachedAttributes
 {
     private static bool $disableCache = false;
