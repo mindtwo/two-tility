@@ -89,4 +89,17 @@ class RouteMatch
     {
         return $this->operation;
     }
+
+    /**
+     * Get the handler method name based on the operation and path.
+     *
+     * This generates a method name like `handleGetUsers` for GET requests to `/users`.
+     */
+    public function handlerMethod(): string
+    {
+        $operation = ucfirst($this->operation());
+        $path = pascalCasePath($this->routeOperation()->pattern());
+
+        return "handle{$path}{$operation}";
+    }
 }

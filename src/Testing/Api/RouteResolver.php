@@ -53,10 +53,10 @@ class RouteResolver
      *
      * @param  string  $collection  The base collection name
      * @param  string  $operation  The operation name (custom operation name)
-     * @param  string  $method  The HTTP method for this operation
      * @param  string  $crudOperation  The CRUD operation to map to ('list', 'show', 'create', 'update', 'delete')
+     * @param  string  $method  The HTTP method for this operation
      */
-    public function registerNestedResourceOperation(string $collection, string $operation, string $method, ?string $collectionName = null, string $crudOperation = 'list'): void
+    public function registerNestedResourceOperation(string $collection, string $operation, string $method, string $crudOperation = 'list', ?string $collectionName = null): void
     {
         $collectionName = $collectionName ?? $collection;
 

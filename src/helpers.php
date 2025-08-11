@@ -78,6 +78,8 @@ if (! function_exists('pascalCasePath')) {
      */
     function pascalCasePath(string $path): string
     {
+        $path = preg_replace('#/?\{[^/}]+\}/?#', '/', $path);
+
         return collect(explode('/', trim($path, '/')))
             ->filter(fn ($segment) => ! str_starts_with($segment, '{')) // remove dynamic segments
             ->map(fn ($segment) => str_replace(' ', '', ucwords(str_replace('-', ' ', $segment))))

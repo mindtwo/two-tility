@@ -55,7 +55,7 @@ class YamlFakeApiParser implements SpecParserInterface
 
             // Process base operations (list, create, etc.)
             if (! empty($collection['operations'])) {
-                $this->processOperations($basePath, $collection['operations'], $basePath, $basePath);
+                $this->processOperations($basePath, $collection['operations'], $basePath, $collectionName, $basePath);
             }
 
             // Process nested routes

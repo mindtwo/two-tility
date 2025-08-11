@@ -73,6 +73,15 @@ class ApiFake
     protected $responseFormatter = null;
 
     /**
+     * Temporary response overrides with call counts.
+     *
+     * Structure: [path][method] = ['response' => mixed, 'count' => int, 'used' => int]
+     *
+     * @var array<string, array<string, array{response: mixed, count: int, used: int}>>
+     */
+    protected array $temporaryResponses = [];
+
+    /**
      * Create a new instance of the ApiFake class.
      *
      * @param  string  $baseUrl  The base URL for the fake API.
@@ -93,6 +102,14 @@ class ApiFake
             "{$this->baseUrl}/*" => function (Request $request) {
                 $path = parse_url($request->url(), PHP_URL_PATH);
                 $method = strtoupper($request->method());
+
+                // Check for temporary response overrides first (before route matching)
+                $temporaryResponse = $this->checkTemporaryResponse($path, $method);
+                if ($temporaryResponse !== null) {
+                    $this->lastResponse = $temporaryResponse;
+
+                    return $this->lastResponse;
+                }
 
                 // Get the route match to pass to handlers
                 $match = $this->routeResolver->matchRoute($path, $method);
@@ -123,28 +140,17 @@ class ApiFake
     {
         // For nested operations like /collection/{resource}/operation, try custom handler first
         $operationName = $match->operation();
-        $collectionName = $match->collection();
 
-        if ($operationName && $collectionName) {
-            // Try method like getCollectionResourceOperation
-            $nestedHandlerMethod = strtolower($method).ucfirst($collectionName).'Resource'.ucfirst($operationName);
-
-            if (method_exists($this, $nestedHandlerMethod)) {
-                $result = $this->{$nestedHandlerMethod}($path, $request, $method);
-
-                return $this->processHandlerResult($result, $path, $method, $operationName);
-            }
-        }
-
-        // Get method handler name for standard operations
-        $handlerMethod = strtolower($method).pascalCasePath($path).ucfirst($operationName);
-
-        if (method_exists($this, $handlerMethod)) {
-            $result = $this->{$handlerMethod}($path, $request, $method);
+        // Check if a custom handler method exists for the matched operation
+        if (method_exists($this, $match->handlerMethod())) {
+            // Call the custom handler method
+            $handlerMethodName = $match->handlerMethod();
+            $result = $this->{$handlerMethodName}($request, $match, $path, $method);
 
             return $this->processHandlerResult($result, $path, $method, $operationName);
         }
 
+        // If no custom handler, use the default handlers based on operation type
         $result = match ($operationName) {
             'list' => $this->handleList($match, $request),
             'show' => $this->handleShow($match, $request),
@@ -253,12 +259,13 @@ class ApiFake
         // Resolve the scope key based on the request
         $scope = $this->resolveScopeKey($request);
 
-        if (! $this->store->has($routeMatch->path(), $scope)) {
+        // If there are no items in the collection for the scope, return an empty array
+        if (! $this->store->has($routeMatch->collection(), $scope)) {
             return [];
         }
 
         // Get the list of items in the collection
-        $list = array_values($this->store->get($routeMatch->path(), $scope));
+        $list = array_values($this->store->get($routeMatch->collection(), $scope));
 
         return $list;
     }
@@ -627,5 +634,122 @@ class ApiFake
             $parser->getFakerDefinitions(),
             $parser->getAuthRequirements(),
         );
+    }
+
+    /**
+     * Add a temporary response override that will be returned for the specified path and method.
+     * The response will be returned for the specified number of calls, then removed.
+     *
+     * @param  string  $path  The path to override (e.g., '/users', '/users/123').
+     * @param  string  $method  The HTTP method to override (e.g., 'GET', 'POST').
+     * @param  mixed  $response  The response data to return.
+     * @param  int  $count  The number of times to return this response (default: 1).
+     * @param  int  $statusCode  The HTTP status code to return (default: 200).
+     * @param  array<string, string>  $headers  Additional headers to include.
+     */
+    public function addTemporaryResponse(string $path, string $method, mixed $response, int $count = 1, int $statusCode = 200, array $headers = []): self
+    {
+        $normalizedPath = rtrim($path, '/') ?: '/';
+        $normalizedMethod = strtoupper($method);
+
+        $this->temporaryResponses[$normalizedPath][$normalizedMethod] = [
+            'response' => $response,
+            'count' => $count,
+            'used' => 0,
+            'statusCode' => $statusCode,
+            'headers' => $headers,
+        ];
+
+        return $this;
+    }
+
+    /**
+     * Check if there's a temporary response override for the given path and method.
+     * If found and not exhausted, increments usage count and returns the response.
+     * If exhausted, removes the override and returns null.
+     *
+     * @param  string  $path  The request path.
+     * @param  string  $method  The HTTP method.
+     * @return PromiseInterface|null The temporary response or null if none available.
+     */
+    protected function checkTemporaryResponse(string $path, string $method): ?PromiseInterface
+    {
+        $normalizedPath = rtrim($path, '/') ?: '/';
+        $normalizedMethod = strtoupper($method);
+
+        // Check for exact path match first
+        if (isset($this->temporaryResponses[$normalizedPath][$normalizedMethod])) {
+            $override = &$this->temporaryResponses[$normalizedPath][$normalizedMethod];
+
+            if ($override['used'] < $override['count']) {
+                $override['used']++;
+
+                // Remove if exhausted
+                if ($override['used'] >= $override['count']) {
+                    unset($this->temporaryResponses[$normalizedPath][$normalizedMethod]);
+                    if (empty($this->temporaryResponses[$normalizedPath])) {
+                        unset($this->temporaryResponses[$normalizedPath]);
+                    }
+                }
+
+                return Http::response($override['response'], $override['statusCode'], $override['headers']);
+            }
+        }
+
+        // Check for wildcard patterns (e.g., /users/* matches /users/123)
+        foreach ($this->temporaryResponses as $overridePath => $methods) {
+            if (str_ends_with($overridePath, '/*')) {
+                $basePath = rtrim($overridePath, '/*');
+                if (str_starts_with($normalizedPath, $basePath)) {
+                    if (isset($methods[$normalizedMethod])) {
+                        $override = &$this->temporaryResponses[$overridePath][$normalizedMethod];
+
+                        if ($override['used'] < $override['count']) {
+                            $override['used']++;
+
+                            // Remove if exhausted
+                            if ($override['used'] >= $override['count']) {
+                                unset($this->temporaryResponses[$overridePath][$normalizedMethod]);
+                                if (empty($this->temporaryResponses[$overridePath])) {
+                                    unset($this->temporaryResponses[$overridePath]);
+                                }
+                            }
+
+                            return Http::response($override['response'], $override['statusCode'], $override['headers']);
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Clear all temporary response overrides.
+     */
+    public function clearTemporaryResponses(): self
+    {
+        $this->temporaryResponses = [];
+
+        return $this;
+    }
+
+    /**
+     * Get the current temporary response overrides.
+     *
+     * @return array<string, array<string, array{response: mixed, count: int, used: int, statusCode: int, headers: array<string, string>}>>
+     */
+    public function getTemporaryResponses(): array
+    {
+        return $this->temporaryResponses;
+    }
+
+    /**
+     * Get the store instance used by the API fake.
+     */
+    public function store(): FakeArrayStore
+    {
+        return $this->store;
     }
 }
