@@ -154,11 +154,8 @@ class RouteResolver
     {
         $parts = explode('/', trim($path, '/'));
 
-        if (count($parts) >= 1) {
-            return $parts[0];
-        }
-
-        return null;
+        // @phpstan-ignore-next-line
+        return $parts[0] ?? null;
     }
 
     /**

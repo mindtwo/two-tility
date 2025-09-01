@@ -322,6 +322,10 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     abstract public function keys(): array;
 
     /**
+     * Abstract/Interface Implementations
+     */
+
+    /**
      * Get the instance as an array.
      *
      * @return array<string, mixed>

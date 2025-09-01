@@ -7,6 +7,15 @@ namespace mindtwo\TwoTility\Testing\Api;
  */
 class RouteOperation
 {
+    /**
+     * @param  string  $operation  The operation type (e.g., 'list', 'show', 'create', 'update', 'delete').
+     * @param  string  $pattern  The pattern to match the operation (e.g., '/users/{id}').
+     * @param  string  $regex  The compiled regex pattern for matching.
+     * @param  string  $method  The HTTP method for this operation (e.g., 'POST', 'GET').
+     * @param  string  $collectionName  The collection name this operation belongs to.
+     * @param  array<string, string>  $parameters  Optional parameters extracted from the path.
+     * @param  string|null  $basePath  Optional base path for the API.
+     */
     public function __construct(
         public readonly string $operation,
         public readonly string $pattern,

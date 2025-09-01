@@ -103,6 +103,9 @@ trait HasCachedAttributes
         return get_class($this->dataCaches[$name]) ?? null;
     }
 
+    /**
+     * Get the data cache instance by name.
+     */
     protected function getDataCache(string $name): ?DataCache
     {
         if (! isset($this->dataCaches[$name])) {

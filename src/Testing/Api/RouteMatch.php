@@ -7,6 +7,14 @@ namespace mindtwo\TwoTility\Testing\Api;
  */
 class RouteMatch
 {
+    /**
+     * @param  RouteOperation  $operation  The matched operation type.
+     * @param  string  $path  The full matched path.
+     * @param  string  $method  The HTTP method used for the request.
+     * @param  string  $collectionName  The name of the collection being accessed.
+     * @param  array<string, string>  $parameters  Extracted parameters from the path.
+     * @param  string|null  $basePath  Optional base path for the API.
+     */
     public function __construct(
         public readonly RouteOperation $operation,
         public readonly string $path,

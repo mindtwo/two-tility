@@ -7,6 +7,11 @@ namespace mindtwo\TwoTility\Testing\Api;
  */
 class ApiResponse
 {
+    /**
+     * @param  mixed  $data  The response data, can be any type.
+     * @param  int  $status  The HTTP status code (default is 200).
+     * @param  array<string, string>  $headers  Optional headers for the response.
+     */
     public function __construct(
         public readonly mixed $data,
         public readonly int $status = 200,
@@ -15,6 +20,9 @@ class ApiResponse
 
     /**
      * Create a successful response (200).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function ok(mixed $data, array $headers = []): self
     {
@@ -23,6 +31,9 @@ class ApiResponse
 
     /**
      * Create a created response (201).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function created(mixed $data, array $headers = []): self
     {
@@ -31,6 +42,9 @@ class ApiResponse
 
     /**
      * Create a not found response (404).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function notFound(mixed $data = ['error' => 'Not found'], array $headers = []): self
     {
@@ -39,6 +53,9 @@ class ApiResponse
 
     /**
      * Create a bad request response (400).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function badRequest(mixed $data = ['error' => 'Bad request'], array $headers = []): self
     {
@@ -47,6 +64,9 @@ class ApiResponse
 
     /**
      * Create an unauthorized response (401).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function unauthorized(mixed $data = ['error' => 'Unauthorized'], array $headers = []): self
     {
@@ -55,6 +75,9 @@ class ApiResponse
 
     /**
      * Create a forbidden response (403).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function forbidden(mixed $data = ['error' => 'Forbidden'], array $headers = []): self
     {
@@ -63,6 +86,9 @@ class ApiResponse
 
     /**
      * Create an unprocessable entity response (422).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function unprocessableEntity(mixed $data = ['error' => 'Unprocessable entity'], array $headers = []): self
     {
@@ -71,6 +97,9 @@ class ApiResponse
 
     /**
      * Create an internal server error response (500).
+     *
+     * @param  mixed  $data  The response data.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function serverError(mixed $data = ['error' => 'Internal server error'], array $headers = []): self
     {
@@ -79,6 +108,10 @@ class ApiResponse
 
     /**
      * Create a custom response with specific status code.
+     *
+     * @param  mixed  $data  The response data.
+     * @param  int  $status  The HTTP status code.
+     * @param  array<string, string>  $headers  Optional headers for the response.
      */
     public static function withStatus(mixed $data, int $status, array $headers = []): self
     {
@@ -103,6 +136,8 @@ class ApiResponse
 
     /**
      * Get the headers.
+     *
+     * @return array<string, string> The headers for the response.
      */
     public function getHeaders(): array
     {
