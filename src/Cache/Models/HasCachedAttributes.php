@@ -3,7 +3,6 @@
 namespace mindtwo\TwoTility\Cache\Models;
 
 use mindtwo\TwoTility\Cache\Data\DataCache;
-use mindtwo\TwoTility\Cache\Queue\SerializedCache;
 
 // @phpstan-ignore-next-line
 trait HasCachedAttributes
@@ -313,49 +312,5 @@ trait HasCachedAttributes
         }
 
         return array_key_exists($name, $this->getDataCaches());
-    }
-
-    /**
-     * Get all loaded data caches for the model serialized.
-     */
-    public function getSerializedDataCaches(): array
-    {
-        $serializedCaches = [];
-
-        foreach ($this->loadedDataCaches as $cacheName => $dataCache) {
-            if (! $dataCache instanceof DataCache || ! $dataCache->serializeable()) {
-                continue;
-            }
-
-            $serializedCaches[$cacheName] = new SerializedCache(
-                get_class($dataCache),
-                $dataCache->toArray(),
-                $this->getKey(),
-                get_class($this)
-            );
-        }
-
-        return $serializedCaches;
-    }
-
-    public function loadCachesWithUnserializedData(array $serializedCaches)
-    {
-        foreach ($serializedCaches as $name => $serializedCache) {
-            if (! $serializedCache instanceof SerializedCache) {
-                continue;
-            }
-
-            $instance = new $serializedCache->clz($this);
-            if (! $instance instanceof DataCache) {
-                continue;
-            }
-
-            $data = $serializedCache->data ?? [];
-
-            $instance->setData($data);
-            $this->retrievedCachedAttributes = array_merge($this->retrievedCachedAttributes, $data);
-
-            $this->loadedDataCaches[$name] = $instance;
-        }
     }
 }
