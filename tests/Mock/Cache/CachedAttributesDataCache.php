@@ -2,6 +2,7 @@
 
 namespace mindtwo\TwoTility\Tests\Mock\Cache;
 
+use Illuminate\Support\Facades\Gate;
 use mindtwo\TwoTility\Cache\Data\DataCache;
 
 class CachedAttributesDataCache extends DataCache
@@ -46,5 +47,11 @@ class CachedAttributesDataCache extends DataCache
     public function allowEmpty(): bool
     {
         return $this->model->allowEmpty;
+    }
+
+    protected function authorize(): bool
+    {
+        // Authorization logic can be added here if needed
+        return Gate::allows('access-cached-attributes');
     }
 }

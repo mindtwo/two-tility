@@ -4,7 +4,7 @@ namespace mindtwo\TwoTility\Tests\Mock;
 
 use mindtwo\TwoTility\Tests\Mock\Cache\CachedAttributesDataCache;
 
-class CachedAttributesModel extends \Illuminate\Database\Eloquent\Model implements \mindtwo\TwoTility\Cache\Contracts\HasSerializeableCacheData
+class CachedAttributesModel extends \Illuminate\Database\Eloquent\Model
 {
     use \mindtwo\TwoTility\Cache\Models\HasCachedAttributes;
 

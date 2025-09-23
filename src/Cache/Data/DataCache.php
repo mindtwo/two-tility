@@ -5,6 +5,7 @@ namespace mindtwo\TwoTility\Cache\Data;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 use JsonSerializable;
 use Stringable;
 
@@ -58,11 +59,16 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     protected bool $loadOnlyOnce = false;
 
     /**
+     * Allow console access.
+     * Set to true if data cache should be accessible from an application
+     * while running in console mode.
+     */
+    protected bool $allowConsoleAccess = false;
+
+    /**
      * Attempted load.
      */
     private bool $attemptedLoad = false;
-
-    private bool $serializeable = true;
 
     /**
      * DataCache constructor.
@@ -75,6 +81,11 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
 
     public function load(): static
     {
+        if (! $this->authorize()) {
+            // If authorization fails, throw an exception
+            throw new \RuntimeException('Unauthorized to access data cache.');
+        }
+
         if (! $this->canLoad()) {
             return $this;
         }
@@ -179,6 +190,20 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
     }
 
     /**
+     * Check if the current user is authorized to access the data cache.
+     * Default to Gate::allows('view', $this->model).
+     */
+    protected function authorize(): bool
+    {
+        if ($this->allowConsoleAccess && app()->runningInConsole()) {
+            // Allow access in console mode if allowConsoleAccess is true
+            return true;
+        }
+
+        return Gate::allows('view', $this->model);
+    }
+
+    /**
      * Get attribute value from data cache.
      *
      * @param  mixed  $name
@@ -268,6 +293,9 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         return $this->ttl;
     }
 
+    /**
+     * Check if data cache can be loaded.
+     */
     protected function canLoad(): bool
     {
         if ($this->loadOnlyOnce && $this->attemptedLoad) {
@@ -277,16 +305,25 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         return true;
     }
 
+    /**
+     * Check if the cache allows empty data.
+     */
     public function allowEmpty(): bool
     {
         return $this->allowEmpty;
     }
 
+    /**
+     * Check if the cache should load on retrieving the model.
+     */
     public function loadOnRetrieved(): bool
     {
         return $this->loadOnRetrieved;
     }
 
+    /**
+     * Check if the cache should load on accessing an attribute.
+     */
     public function loadOnAccess(): bool
     {
         return $this->loadOnAccess;
@@ -300,11 +337,6 @@ abstract class DataCache implements Arrayable, Jsonable, JsonSerializable, Strin
         $driver = $this->cacheDriver ?? config('cache.default');
 
         return Cache::store($driver);
-    }
-
-    public function serializeable(): bool
-    {
-        return $this->serializeable;
     }
 
     /**
