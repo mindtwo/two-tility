@@ -2,13 +2,11 @@
 
 namespace mindtwo\TwoTility\Cache\Models;
 
-use Illuminate\Support\Facades\Log;
 use mindtwo\TwoTility\Cache\KeyGenerator;
 
 // @phpstan-ignore-next-line
 trait BustsCacheKeys
 {
-
     /**
      * Get the cache keys we want to bust for a certain event.
      *
