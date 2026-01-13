@@ -4,7 +4,6 @@ namespace mindtwo\TwoTility\Cache\Models;
 
 use mindtwo\TwoTility\Cache\KeyGenerator;
 
-// @phpstan-ignore-next-line
 trait BustsCacheKeys
 {
     /**
