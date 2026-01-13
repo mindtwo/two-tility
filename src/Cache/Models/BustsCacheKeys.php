@@ -8,6 +8,14 @@ use mindtwo\TwoTility\Cache\KeyGenerator;
 // @phpstan-ignore-next-line
 trait BustsCacheKeys
 {
+
+    /**
+     * Get the cache keys we want to bust for a certain event.
+     *
+     * @return string[]|KeyGenerator[]
+     */
+    abstract protected function getCacheKeysToBust(string $eventName): array;
+
     public static function bootBustsCacheKeys()
     {
         $events = self::getBustingEvents();
@@ -42,25 +50,9 @@ trait BustsCacheKeys
      */
     protected function bustCacheKeys(string $event)
     {
-        if (! method_exists($this, 'getCacheKeysToBust')) {
-            Log::warning('Class '.get_class($this).' uses BustsCacheKeys trait but does not implement getCacheKeysToBust() method.');
-
-            return;
-        }
-
         $keys = $this->getCacheKeysToBust($event);
 
         if (! is_array($keys) || empty($keys)) {
-            Log::warning('Class '.get_class($this).' method "getCacheKeysToBust" returned other value than array or empty cache keys for event '.$event.'.');
-
-            return;
-        }
-
-        if (array_filter($keys, function ($key) {
-            return ! is_string($key) && ! $key instanceof KeyGenerator && ! is_callable($key);
-        })) {
-            Log::warning('Class '.get_class($this).' method "getCacheKeysToBust" returned non-string cache keys for event '.$event.'.');
-
             return;
         }
 

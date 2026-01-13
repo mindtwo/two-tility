@@ -3,7 +3,7 @@
 namespace mindtwo\TwoTility\Tests;
 
 use Illuminate\Support\Facades\Schema;
-use mindtwo\TwoTility\Providers\TwoTilityProvider;
+use mindtwo\TwoTility\TwoTilityProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
