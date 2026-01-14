@@ -2,151 +2,45 @@
 
 namespace mindtwo\TwoTility\Cache\Models;
 
-use mindtwo\TwoTility\Cache\Data\DataCache;
+use Illuminate\Support\Facades\Cache;
 
-// @phpstan-ignore-next-line
 trait HasCachedAttributes
 {
-    private static bool $disableCache = false;
-
-    private static bool $disableCacheLoad = false;
+    /**
+     * The cached attributes for the model.
+     * Uninitialized = not loaded yet, array = loaded (may be empty)
+     */
+    protected array $cachedAttributes;
 
     /**
-     * Data caches that should be loaded on access.
+     * Get the cache key for data.
      */
-    protected array $loadsOnAccess = [];
-
-    /**
-     * Data caches that should be loaded on retrieved.
-     */
-    protected array $loadsOnRetrieved = [];
-
-    /**
-     * Retrieved cached attributes.
-     *
-     * @var array<string, mixed>
-     */
-    protected array $retrievedCachedAttributes = [];
-
-    /**
-     * Data caches.
-     *
-     * @var array<string, DataCache>
-     */
-    protected array $dataCaches = [];
-
-    protected array $cacheAbleAttributes = [];
-
-    /**
-     * Data that is cached.
-     *
-     * @var array<string, mixed>
-     */
-    private array $loadedDataCaches = [];
-
-    public static function bootHasCachedAttributes()
+    public function cachedAttributeKey(): string
     {
-        static::created(fn ($model) => self::bootDataCaches($model));
-        static::retrieved(fn ($model) => self::bootDataCaches($model));
+        return cache_key('attributes_cache', [
+            'class' => get_class($this),
+            'key' => $this->getKey(),
+        ])->toString();
     }
 
-    protected static function bootDataCaches($model)
+    /**
+     * Load the cached attributes from cache to memory.
+     */
+    public function loadCachedAttributes(): void
     {
-        if (static::$disableCache) {
+        if ($this->attemptedCacheLoad()) {
+            // Skip if attributes are loaded
             return;
         }
 
-        $dataCaches = $model->getDataCaches();
+        // Before load
+        $this->beforeCachedAttributeLoad();
 
-        foreach ($dataCaches as $key => $cache) {
-            $clz = $cache;
+        // Load
+        $this->cachedAttributes = Cache::store()->get($this->cachedAttributeKey(), []);
 
-            if (! $clz || ! is_a($clz, DataCache::class, true)) {
-                continue;
-            }
-
-            $cache = new $clz($model);
-            $model->dataCaches[$key] = $cache;
-
-            $model->cacheAbleAttributes = array_merge($model->cacheAbleAttributes, $cache->keys());
-
-            if ($cache->loadOnAccess()) {
-                $model->loadsOnAccess[] = $key;
-            }
-
-            if ($cache->loadOnRetrieved()) {
-                $model->loadsOnRetrieved[] = $key;
-            }
-        }
-
-        if (static::$disableCacheLoad) {
-            return;
-        }
-
-        $model->loadDataCache(array_keys($model->loadsOnRetrieved));
-    }
-
-    /**
-     * Get data caches.
-     *
-     * @return null|array<string, class-string<DataCache>>
-     */
-    abstract public function getDataCaches(): ?array;
-
-    protected function getDataCacheClassName(string $name): ?string
-    {
-        if (! isset($this->dataCaches[$name])) {
-            return null;
-        }
-
-        return get_class($this->dataCaches[$name]) ?? null;
-    }
-
-    protected function getDataCache(string $name): ?DataCache
-    {
-        if (! isset($this->dataCaches[$name])) {
-            return null;
-        }
-
-        return $this->dataCaches[$name];
-    }
-
-    /**
-     * Get attribute value from data cache.
-     *
-     * @param  mixed  $name
-     * @return mixed
-     */
-    protected function getCachedAttribute($name)
-    {
-        if (isset($this->retrievedCachedAttributes[$name])) {
-            return $this->retrievedCachedAttributes[$name];
-        }
-
-        $this->loadDataCache($this->loadsOnAccess);
-        foreach ($this->loadedDataCaches as $key => $value) {
-            if (! $value || ! $value instanceof DataCache) {
-                continue;
-            }
-
-            $cachedData = $value->data();
-            $this->retrievedCachedAttributes = array_merge($this->retrievedCachedAttributes, $cachedData);
-            if (array_key_exists($name, $cachedData)) {
-                return $cachedData[$name];
-            }
-        }
-
-        return $this->throwMissingAttributeExceptionIfApplicable($name);
-    }
-
-    /**
-     * Check if attribute is cacheable.
-     *
-     * @param  mixed  $name
-     */
-    protected function isCacheableAttribute($name): bool
-    {
-        return in_array($name, $this->cacheAbleAttributes);
+        // After load
+        $this->afterCachedAttributeLoad();
     }
 
     /**
@@ -157,13 +51,16 @@ trait HasCachedAttributes
      */
     public function getAttribute($name)
     {
-        // if cache is disabled, return attribute directly
-        if (static::$disableCache) {
-            return parent::getAttribute($name);
+        if (! $name) {
+            return;
+        }
+
+        if (! $this->attemptedCacheLoad() && $this->shouldLoadOnAttributeName($name)) {
+            $this->loadCachedAttributes();
         }
 
         // if attribute exists, return it
-        if ($this->isCacheableAttribute($name)) {
+        if ($this->hasCachedAttribute($name)) {
             return $this->getCachedAttribute($name);
         }
 
@@ -171,146 +68,91 @@ trait HasCachedAttributes
     }
 
     /**
-     * Disable data caching.
-     */
-    public static function disableCache(bool $onlyLoad = false): void
-    {
-        if (! $onlyLoad) {
-            static::$disableCache = true;
-        }
-
-        static::$disableCacheLoad = true;
-
-    }
-
-    /**
-     * Alias for disableCache(true).
-     */
-    public static function disableCacheLoad(): void
-    {
-        self::disableCache(true);
-    }
-
-    /**
-     * Enable data cache.
-     */
-    public static function enableCache(): void
-    {
-        static::$disableCache = false;
-        static::$disableCacheLoad = false;
-    }
-
-    /**
-     * Load data cache by name.
-     */
-    public function withCache(string|array $name): self
-    {
-        $this->loadDataCache($name);
-
-        return $this;
-    }
-
-    /**
-     * Refresh data cache by name.
-     */
-    public function withoutCache(string|array $name): self
-    {
-        $this->loadsOnAccess = array_diff($this->loadsOnAccess, (array) $name);
-        $this->unloadDataCache($name);
-        $this->retrievedCachedAttributes = [];
-
-        return $this;
-    }
-
-    protected function refreshDataCache(string|array $name): self
-    {
-        if (! $this->usesDataCache($name)) {
-            return $this;
-        }
-
-        if (gettype($name) === 'string') {
-            $this->loadedDataCaches[$name]->refresh();
-
-            return $this;
-        }
-
-        foreach ($name as $cacheName) {
-            $this->refreshDataCache($cacheName);
-        }
-
-        return $this;
-    }
-
-    /**
-     * Unload data cache by name.
+     * Get attribute value from data cache.
      *
-     * @param  string|array<string>  $name
+     * @param  mixed  $name
+     * @return mixed
      */
-    protected function unloadDataCache(string|array $name): self
+    public function getCachedAttribute($name)
     {
-        if (! $this->usesDataCache($name)) {
-            return $this;
-        }
-
-        if (gettype($name) === 'string') {
-            $this->loadedDataCaches[$name]->unload();
-            $this->loadedDataCaches[$name] = false;
-
-            return $this;
-        }
-
-        foreach ($name as $cacheName) {
-            $this->unloadDataCache($cacheName);
-        }
-
-        return $this;
+        // Get the cached attribute
+        return $this->cachedAttributes[$name] ?? null;
     }
 
     /**
-     * Load available data cache by name.
+     * Hook called before we load the cached attributes.
      */
-    protected function loadDataCache(string|array $name): self
+    protected function beforeCachedAttributeLoad(): void
     {
-        if ((gettype($name) === 'string' && ! $this->usesDataCache($name)) || static::$disableCacheLoad) {
-            return $this;
-        }
-
-        if (gettype($name) === 'string') {
-            if (isset($this->loadedDataCaches[$name])) {
-                return $this;
-            }
-
-            $cache = $this->getDataCache($name);
-
-            if (! $cache || ! $cache instanceof DataCache) {
-                return $this;
-            }
-
-            // Load cache
-            $cache->load();
-
-            $this->loadedDataCaches[$name] = $cache;
-
-            return $this;
-        }
-
-        // Load all caches
-        foreach ($name as $cacheName) {
-            $this->loadDataCache($cacheName);
-        }
-
-        return $this;
+        // ...
     }
 
     /**
-     * Check if model uses data cache with given name.
+     * Hook called before we load the cached attributes.
      */
-    private function usesDataCache(string $name): bool
+    protected function afterCachedAttributeLoad(): void
     {
-        if (empty($this->getDataCaches())) {
+        // ...
+    }
+
+    /**
+     * Check if lazy loading should occur based on key.
+     *
+     * @param  mixed  $name
+     */
+    protected function shouldLoadOnAttributeName($name): bool
+    {
+        return in_array($name, $this->cachableAttributes);
+    }
+
+    /**
+     *  Check whether we attempted to load cached attributes.
+     */
+    protected function attemptedCacheLoad(): bool
+    {
+        return isset($this->cachedAttributes);
+    }
+
+    /**
+     * Check if cached attributes are populated.
+     *
+     * @return boolean
+     */
+    protected function areCachedAttributesLoaded(): bool
+    {
+        return $this->attemptedCacheLoad() && ! empty($this->cachedAttributes);
+    }
+
+    /**
+     * Check if an attribute is in cache for name.
+     *
+     * @param  mixed  $name
+     */
+    protected function hasCachedAttribute($name): bool
+    {
+        if (! $this->attemptedCacheLoad()) {
+            // Check if we attempted to load the attributes
             return false;
         }
 
-        return array_key_exists($name, $this->getDataCaches());
+        return isset($this->cachedAttributes[$name]);
+    }
+
+    /**
+     * Check if the cached attribute key exists.
+     */
+    protected function cachedAttributeKeyExists(): bool
+    {
+        return Cache::store()->has($this->cachedAttributeKey());
+    }
+
+    /**
+     * Get cachable attribute keys
+     *
+     * @return array
+     */
+    protected function cachableAttributes(): array
+    {
+        return isset($this->cachableAttributes) ? $this->cachableAttributes : [];
     }
 }
