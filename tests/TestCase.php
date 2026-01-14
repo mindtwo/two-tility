@@ -22,6 +22,9 @@ class TestCase extends Orchestra
 
         Schema::create('cached_attributes', function ($table) {
             $table->increments('id');
+            $table->string('name');
+            $table->unsignedInteger('parent_id')->nullable();
+            $table->foreign('parent_id')->references('id')->on('cached_attributes')->onDelete('cascade');
         });
 
         $this->beforeApplicationDestroyed(

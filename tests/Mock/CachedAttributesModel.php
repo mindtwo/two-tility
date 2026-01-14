@@ -2,24 +2,45 @@
 
 namespace mindtwo\TwoTility\Tests\Mock;
 
-use mindtwo\TwoTility\Tests\Mock\Cache\CachedAttributesDataCache;
+use Illuminate\Database\Eloquent\Model;
+use mindtwo\TwoTility\Cache\Models\HasCachedAttributes;
 
-class CachedAttributesModel extends \Illuminate\Database\Eloquent\Model
+class CachedAttributesModel extends Model
 {
-    use \mindtwo\TwoTility\Cache\Models\HasCachedAttributes;
+    use HasCachedAttributes;
 
     protected $table = 'cached_attributes';
 
     public $timestamps = false;
 
-    public $loadOnAccess = true;
+    public $fillable = [
+        'name',
+        'parent_id',
+    ];
 
-    public $allowEmpty = true;
+    /**
+     * The attributes accessible via this helper.
+     *
+     * @var list<string>
+     */
+    protected array $cachableAttributes = [
+        'foo',
+        'baz',
+    ];
 
-    public function getDataCaches(): ?array
+    /**
+     * Get the parent model (recursive relationship).
+     */
+    public function parent()
     {
-        return [
-            'data' => CachedAttributesDataCache::class,
-        ];
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /**
+     * Get child models (inverse of recursive relationship).
+     */
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id');
     }
 }

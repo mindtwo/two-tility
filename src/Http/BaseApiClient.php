@@ -134,10 +134,6 @@ abstract class BaseApiClient
 
     /**
      * Create a log entry for a request.
-     *
-     * @param RequestInterface $request
-     * @param ResponseInterface $response
-     * @return void
      */
     protected function logRequest(RequestInterface $request, ResponseInterface $response): void
     {
