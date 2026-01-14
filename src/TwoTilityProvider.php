@@ -14,6 +14,7 @@ class TwoTilityProvider extends ServiceProvider
     public function boot()
     {
         $this->publishConfig();
+        $this->publishMigrations();
     }
 
     /**
@@ -24,6 +25,7 @@ class TwoTilityProvider extends ServiceProvider
     public function register()
     {
         $this->mergeConfigFrom(__DIR__.'/../config/two-tility.php', 'two-tility');
+        $this->mergeConfigFrom(__DIR__.'/../config/external-api.php', 'external-api');
     }
 
     /**
@@ -34,9 +36,26 @@ class TwoTilityProvider extends ServiceProvider
     protected function publishConfig()
     {
         $configPath = __DIR__.'/../config/two-tility.php';
+        $externalApiConfigPath = __DIR__.'/../config/external-api.php';
 
         $this->publishes([
             $configPath => config_path('two-tility.php'),
         ], 'two-tility');
+
+        $this->publishes([
+            $externalApiConfigPath => config_path('external-api.php'),
+        ], 'external-api');
+    }
+
+    /**
+     * Publish the migration files.
+     *
+     * @return void
+     */
+    protected function publishMigrations()
+    {
+        $this->publishes([
+            __DIR__.'/../database/migrations/' => database_path('migrations'),
+        ], 'external-api-migrations');
     }
 }

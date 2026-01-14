@@ -11,6 +11,7 @@ parameters:
 
     ignoreErrors:
         - identifier: missingType.iterableValue
+        - identifier: missingType.generics
         - identifier: trait.unused
 
 #    excludePaths:
