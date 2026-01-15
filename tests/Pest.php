@@ -13,6 +13,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use mindtwo\TwoTility\ExternalApiTokens\ExternalApiTokens;
 
 uses(\mindtwo\TwoTility\Tests\TestCase::class)
     ->beforeEach(function () {
@@ -57,4 +58,8 @@ function reqHeader(string $headerName, string $value)
     app()->instance('request', $request);
 
     // return request()->header($headerName);
+}
+
+function repo() {
+    return app(ExternalApiTokens::class)->repository('test-api');
 }

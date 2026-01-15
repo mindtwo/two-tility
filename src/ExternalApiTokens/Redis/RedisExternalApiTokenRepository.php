@@ -61,7 +61,7 @@ class RedisExternalApiTokenRepository implements ExternalApiTokenRepository
         ];
 
         // Calculate TTL in seconds
-        $ttl = $validUntil ? (int) $validUntil->diffInSeconds(now()) : null;
+        $ttl = $validUntil ? (int) now()->diffInSeconds($validUntil, false) : null;
 
         // Encrypt data before storing
         $encrypted = Crypt::encryptString(json_encode($data));

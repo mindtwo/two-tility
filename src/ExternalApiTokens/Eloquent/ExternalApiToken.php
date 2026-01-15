@@ -36,6 +36,8 @@ class ExternalApiToken extends Model
         'api_name',
         'token_data',
         'valid_until',
+        'authenticatable_type',
+        'authenticatable_id',
     ];
 
     /**

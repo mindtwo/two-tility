@@ -42,10 +42,12 @@ class ExternalApiTokens
      */
     protected function resolveAlias(string $alias): string
     {
-        if (class_exists($alias)) {
+        // If it's a fully-qualified class name (contains backslash), use it directly
+        if (str_contains($alias, '\\') && class_exists($alias)) {
             return $alias;
         }
 
+        // Otherwise, try to resolve from config
         $repositoryClass = config("external-api.alias.{$alias}");
 
         throw_if(! $repositoryClass, new RuntimeException("Repository alias '{$alias}' not found in config"));

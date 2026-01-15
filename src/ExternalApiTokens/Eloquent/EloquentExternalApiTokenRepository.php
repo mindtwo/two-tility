@@ -31,7 +31,7 @@ class EloquentExternalApiTokenRepository implements ExternalApiTokenRepository
     {
         $token = $this->getToken($authenticatable);
 
-        throw_if(! $token?->token_data, new RuntimeException('Error resolving the token.'));
+        throw_if(! $token?->token_data, new RuntimeException('No token found for authenticatable'));
 
         return $token->token_data;
     }
@@ -165,11 +165,15 @@ class EloquentExternalApiTokenRepository implements ExternalApiTokenRepository
             return $this->current;
         }
 
-        $this->current = ExternalApiToken::query()
+        $token = ExternalApiToken::query()
             ->forAuthenticatable($authenticatable)
             ->forApi($this->apiName)
             ->latest()
             ->first();
+
+        throw_if(! $token, new RuntimeException('No token found for authenticatable'));
+
+        $this->current = $token;
 
         return $this->current;
     }
