@@ -35,10 +35,10 @@ interface ExternalApiTokenRepository
     /**
      * Refresh tokens for Authenticatable.
      *
-     * @param Authenticatable $authenticatable
+     * @param string $refreshToken
      * @return boolean
      */
-    public function refresh(Authenticatable $authenticatable): bool;
+    public function refresh(string $refreshToken): bool;
 
     /**
      * Check if current token is valid for Authenticatable.

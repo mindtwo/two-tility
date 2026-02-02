@@ -3,6 +3,7 @@
 namespace mindtwo\TwoTility;
 
 use Illuminate\Support\ServiceProvider;
+use mindtwo\TwoTility\Console\Commands\GenerateApiServiceDocsCommand;
 
 class TwoTilityProvider extends ServiceProvider
 {
@@ -15,6 +16,7 @@ class TwoTilityProvider extends ServiceProvider
     {
         $this->publishConfig();
         $this->publishMigrations();
+        $this->registerCommands();
     }
 
     /**
@@ -57,5 +59,19 @@ class TwoTilityProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../database/migrations/' => database_path('migrations'),
         ], 'external-api-migrations');
+    }
+
+    /**
+     * Register the package commands.
+     *
+     * @return void
+     */
+    protected function registerCommands()
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                GenerateApiServiceDocsCommand::class,
+            ]);
+        }
     }
 }

@@ -74,7 +74,7 @@ class EloquentExternalApiTokenRepository implements ExternalApiTokenRepository
     /**
      * {@inheritDoc}
      */
-    public function refresh(Authenticatable $authenticatable): bool
+    public function refresh(string $refreshToken): bool
     {
         // This method would typically call an external API to refresh the token
         // The implementation will depend on the specific API integration

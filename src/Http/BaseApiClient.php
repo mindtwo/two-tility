@@ -24,13 +24,15 @@ abstract class BaseApiClient
      */
     public function baseUrl(): string
     {
-        $baseUrl = rtrim($this->config('base_url'), '/');
+        $baseUrl = rtrim($this->config('baseUrl'), '/');
 
         return $baseUrl;
     }
 
     /**
      * Create a new HTTP client instance.
+     *
+     * @return PendingRequest<false>
      */
     public function client(): PendingRequest
     {
@@ -67,7 +69,7 @@ abstract class BaseApiClient
         if ($timeout = $this->config('timeout')) {
             $client->timeout($timeout);
         }
-        if ($connectTimeout = $this->config('connect_timeout')) {
+        if ($connectTimeout = $this->config('connectTimeout')) {
             $client->connectTimeout($connectTimeout);
         }
 
@@ -162,7 +164,7 @@ abstract class BaseApiClient
      */
     private function logLevel(): string
     {
-        return $this->config('log_level', 'error');
+        return $this->config('logLevel', 'error');
     }
 
     /**

@@ -6,12 +6,12 @@ use mindtwo\TwoTility\Tests\Mock\TestApiClient;
 
 beforeEach(function () {
     config([
-        'test-api.base_url' => 'https://api.example.test/v1',
+        'test-api.baseUrl' => 'https://api.example.test/v1',
         'test-api.timeout' => 30,
         'test-api.connectTimeout' => 10,
         'test-api.retries' => 3,
-        'test-api.log_error' => true,
-        'test-api.log_level' => 'error',
+        'test-api.logError' => true,
+        'test-api.logLevel' => 'error',
     ]);
 
     $this->client = new TestApiClient;

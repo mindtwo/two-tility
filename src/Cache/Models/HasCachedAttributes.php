@@ -2,6 +2,7 @@
 
 namespace mindtwo\TwoTility\Cache\Models;
 
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Cache;
 
 trait HasCachedAttributes
@@ -37,7 +38,8 @@ trait HasCachedAttributes
         $this->beforeCachedAttributeLoad();
 
         // Load
-        $this->cachedAttributes = Cache::store()->get($this->cachedAttributeKey(), []);
+        $data = Cache::store()->get($this->cachedAttributeKey(), []);
+        $this->cachedAttributes = $data instanceof Arrayable ? $data->toArray() : $data;
 
         // After load
         $this->afterCachedAttributeLoad();
@@ -135,7 +137,7 @@ trait HasCachedAttributes
             return false;
         }
 
-        return isset($this->cachedAttributes[$name]);
+        return in_array($name, $this->cachableAttributes()) && isset($this->cachedAttributes[$name]);
     }
 
     /**

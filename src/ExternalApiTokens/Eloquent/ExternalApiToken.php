@@ -58,6 +58,11 @@ class ExternalApiToken extends Model
         return data_get($this->token_data, $key);
     }
 
+    public function isValid(): bool
+    {
+        return $this->valid_until === null || $this->valid_until->isFuture();
+    }
+
     /**
      * Get the authenticatable that owns the token.
      */
