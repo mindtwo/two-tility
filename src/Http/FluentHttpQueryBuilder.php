@@ -9,6 +9,9 @@ use Illuminate\Support\Traits\Conditionable;
 use Stringable;
 
 // TODO - write test
+/**
+ * @template T of object
+ */
 class FluentHttpQueryBuilder implements Stringable, Arrayable
 {
     use Conditionable;
@@ -29,8 +32,10 @@ class FluentHttpQueryBuilder implements Stringable, Arrayable
 
     /**
      * Get query results
+     *
+     * @return T
      */
-    public function get(): mixed
+    public function get()
     {
         return ($this->request)($this->__toString());
     }
