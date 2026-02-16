@@ -7,9 +7,9 @@ use mindtwo\TwoTility\Tests\Mock\TestCachedApiService;
 
 beforeEach(function () {
     config([
-        'test-api.base_url' => 'https://api.example.test/v1',
+        'test-api.baseUrl' => 'https://api.example.test/v1',
         'test-api.timeout' => 30,
-        'test-api.log_error' => false,
+        'test-api.logError' => false,
     ]);
 
     $this->cache = Cache::store('array');
