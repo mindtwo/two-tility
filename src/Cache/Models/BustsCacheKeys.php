@@ -2,36 +2,35 @@
 
 namespace mindtwo\TwoTility\Cache\Models;
 
+use Closure;
 use mindtwo\TwoTility\Cache\KeyGenerator;
 
 trait BustsCacheKeys
 {
+    /** Override to define which events trigger cache busting for this model. */
+    protected static string|array $bustOn = [];
+
     /**
-     * Get the cache keys we want to bust for a certain event.
+     * Get the cache keys to bust for the given event.
      *
-     * @return string[]|KeyGenerator[]
+     * @return array<string|KeyGenerator|callable>
      */
     abstract protected function getCacheKeysToBust(string $eventName): array;
 
-    public static function bootBustsCacheKeys()
+    /**
+     * Initialize the trait, register lifecycle event listeners.
+     */
+    public static function bootBustsCacheKeys(): void
     {
-        $events = self::getBustingEvents();
-
-        if (is_null($events)) {
-            return;
-        }
-
-        $events = is_array($events) ? $events : [$events];
-        foreach ($events as $eventName) {
+        foreach (self::getBustingEvents() as $eventName) {
             if ($eventName === 'updated') {
-                // If the model is not dirty, we don't need to bust cache keys.
                 static::updated(function ($model) {
-                    if (! $model->isDirty()) {
-                        return;
+                    if ($model->isDirty()) {
+                        $model->bustCacheKeys('updated');
                     }
-
-                    $model->bustCacheKeys('updated');
                 });
+
+                continue;
             }
 
             static::$eventName(function ($model) use ($eventName) {
@@ -41,44 +40,43 @@ trait BustsCacheKeys
     }
 
     /**
-     * Remove cache keys from cache.
-     *
-     * @return void
+     * Clear cache for the given $event.
      */
-    protected function bustCacheKeys(string $event)
+    protected function bustCacheKeys(string $event): void
     {
         $keys = $this->getCacheKeysToBust($event);
 
-        if (! is_array($keys) || empty($keys)) {
+        if (empty($keys)) {
             return;
         }
 
         foreach ($keys as $key) {
-            if (is_callable($key) && is_string($value = $key())) {
-                $key = $value;
+            if ($key instanceof Closure) {
+                $key = $key();
             }
 
             if ($key instanceof KeyGenerator) {
-                $key = $key->__toString();
+                $key = (string) $key;
             }
 
-            is_string($key) ? cache()->forget($key) : null;
+            if (is_string($key)) {
+                cache()->forget($key);
+            }
         }
     }
 
     /**
-     * Get the events that will bust cache keys.
-     *
-     * @return null|array|string
+     * Get the events we want to bust cache keys on.
      */
-    protected static function getBustingEvents()
+    protected static function getBustingEvents(): array
     {
-        $events = isset(self::$bustOn) ? self::$bustOn : config('two-tility.cache.bust_on');
+        /** @var string|array<string> $events */
+        $events = self::$bustOn ?: config('two-tility.cache.bust_on');
 
-        if (empty($events) || (! is_array($events) && ! is_string($events))) {
-            return null;
+        if (empty($events)) {
+            return [];
         }
 
-        return $events;
+        return (array) $events;
     }
 }
