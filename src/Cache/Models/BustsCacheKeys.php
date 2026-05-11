@@ -7,8 +7,12 @@ use mindtwo\TwoTility\Cache\KeyGenerator;
 
 trait BustsCacheKeys
 {
-    /** Override to define which events trigger cache busting for this model. */
-    protected static string|array $bustOn = [];
+    /**
+     * Override to define which events trigger cache busting for this model.
+     *
+     * @var array<string>
+     */
+    protected static array $bustOn = [];
 
     /**
      * Get the cache keys to bust for the given event.
@@ -22,7 +26,10 @@ trait BustsCacheKeys
      */
     public static function bootBustsCacheKeys(): void
     {
-        foreach (self::getBustingEvents() as $eventName) {
+        /** @var array<string> $events */
+        $events = self::$bustOn ?: config('two-tility.cache.bust_on');
+
+        foreach ($events as $eventName) {
             if ($eventName === 'updated') {
                 static::updated(function ($model) {
                     if ($model->isDirty()) {
@@ -63,20 +70,5 @@ trait BustsCacheKeys
                 cache()->forget($key);
             }
         }
-    }
-
-    /**
-     * Get the events we want to bust cache keys on.
-     */
-    protected static function getBustingEvents(): array
-    {
-        /** @var string|array<string> $events */
-        $events = self::$bustOn ?: config('two-tility.cache.bust_on');
-
-        if (empty($events)) {
-            return [];
-        }
-
-        return (array) $events;
     }
 }
