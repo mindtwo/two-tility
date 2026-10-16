@@ -1,5 +1,8 @@
 <?php
 
+use GuzzleHttp\Psr7\Response;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use mindtwo\TwoTility\Tests\Mock\TestApiClient;
@@ -128,17 +131,17 @@ it('logs error and throws exception on request failure', function () {
 
     try {
         $this->client->getData('123');
-    } catch (\Illuminate\Http\Client\RequestException $e) {
+    } catch (RequestException $e) {
         // Expected exception
         expect($e)->toBeInstanceOf(Throwable::class);
     }
 
     Log::shouldHaveReceived('log')
         ->once()
-        ->with('error', \Mockery::on(function ($message) {
+        ->with('error', Mockery::on(function ($message) {
             return str_contains($message, '[test-api]')
                 && str_contains($message, 'An error occurred while requesting external data');
-        }), \Mockery::on(function ($context) {
+        }), Mockery::on(function ($context) {
             return $context['method'] === 'GET'
                 && str_contains($context['url'], '/data/123');
         }));
@@ -149,9 +152,9 @@ it('does not log error when log_error config is false', function () {
     Log::spy();
 
     Http::fake(function () {
-        throw new \Illuminate\Http\Client\RequestException(
-            new \Illuminate\Http\Client\Response(
-                new \GuzzleHttp\Psr7\Response(404, [], json_encode(['error' => 'Not found']))
+        throw new RequestException(
+            new Illuminate\Http\Client\Response(
+                new Response(404, [], json_encode(['error' => 'Not found']))
             )
         );
     });
@@ -167,4 +170,51 @@ it('does not log error when log_error config is false', function () {
 
 it('returns api name', function () {
     expect($this->client->apiName())->toBe('test-api');
+});
+
+it('retries rate limited requests', function () {
+    config(['test-api.retries' => 2, 'test-api.retryDelay' => 0]);
+
+    Http::fake([
+        'api.example.test/v1/data/123' => Http::sequence()
+            ->push(['message' => 'slow down'], 429)
+            ->push(['id' => 123], 200),
+    ]);
+
+    $response = $this->client->getData('123');
+
+    expect($response->successful())->toBeTrue();
+    Http::assertSentCount(2);
+});
+
+it('retries connection failures', function () {
+    config(['test-api.retries' => 2, 'test-api.retryDelay' => 0]);
+
+    $attempts = 0;
+
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+
+        if ($attempts === 1) {
+            throw new ConnectionException('Connection refused');
+        }
+
+        return Http::response(['id' => 123], 200);
+    });
+
+    $response = $this->client->getData('123');
+
+    expect($response->successful())->toBeTrue()
+        ->and($attempts)->toBe(2);
+});
+
+it('does not retry server errors', function () {
+    config(['test-api.retries' => 2, 'test-api.retryDelay' => 0]);
+
+    Http::fake([
+        'api.example.test/v1/data/123' => Http::response(['message' => 'boom'], 500),
+    ]);
+
+    expect(fn () => $this->client->getData('123'))->toThrow(RequestException::class);
+    Http::assertSentCount(1);
 });

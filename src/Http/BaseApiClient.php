@@ -4,11 +4,12 @@ namespace mindtwo\TwoTility\Http;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\Response;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Throwable;
 
 abstract class BaseApiClient
 {
@@ -80,17 +81,9 @@ abstract class BaseApiClient
             $client->retry(
                 $retries,
                 $retryDelay,
-                function ($response, $exception) {
-                    if ($exception instanceof ConnectionException) {
-                        return true;
-                    }
-
-                    if ($response instanceof Response) {
-                        return $response->status() === 429;
-                    }
-
-                    return false;
-                }
+                // Laravel calls the "when" callback with the exception, not with the response
+                fn (Throwable $exception): bool => $exception instanceof ConnectionException
+                    || ($exception instanceof RequestException && $exception->response->status() === 429),
             );
         }
 
